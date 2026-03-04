@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 private val CompactBoxPaddingHorizontal = 12.dp
@@ -30,7 +29,6 @@ private val CompactBoxMinHeight = 35.dp
 fun ColeInfoBoxCompact(
     text: String,
     modifier: Modifier = Modifier,
-    maxLines: Int = Int.MAX_VALUE,
 ) {
     Box(
         modifier = modifier
@@ -45,8 +43,6 @@ fun ColeInfoBoxCompact(
             style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
-            maxLines = maxLines,
-            overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
         )
     }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma 948-3576: 날짜 네비게이션 좌측 아이콘 (비활성) - 회색 삼각형 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path
+        android:fillColor="#BDBDBD"
+        android:pathData="M14,4 L14,18 L4,11 Z" />
+</vector>

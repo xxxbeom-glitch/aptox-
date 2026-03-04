@@ -48,8 +48,6 @@ object StatisticsData {
         val isRestricted: Boolean,
         /** 카테고리 태그 (SNS, OTT, 게임, 쇼핑, 웹툰, 주식/코인) — 매핑 없으면 null */
         val categoryTag: String? = null,
-        /** 카테고리 비율 계산용 (분) */
-        val usageMs: Long = 0L,
     )
 
     /** 주간 탭용: weekOffset 0=이번 주, -1=저번 주, 1=다음 주 */
@@ -98,169 +96,6 @@ object StatisticsData {
             }
         }
         return dayMinutes.toList()
-    }
-
-    /** 월간: yearOffset 0=올해, -1=작년. 해당 연도의 (startMs, endMs, "YYYY") */
-    fun getMonthRange(yearOffset: Int): Triple<Long, Long, String> {
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.YEAR, yearOffset)
-        val year = cal.get(Calendar.YEAR)
-        cal.set(Calendar.MONTH, Calendar.JANUARY)
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val startMs = cal.timeInMillis
-        cal.set(Calendar.MONTH, Calendar.DECEMBER)
-        cal.set(Calendar.DAY_OF_MONTH, 31)
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        val endMs = cal.timeInMillis
-        return Triple(startMs, endMs, "$year")
-    }
-
-    /** 연간: yearOffset 0=올해. 선택 연도 포함 최대 6년 (selectedYear-5 ~ selectedYear) */
-    fun getYearRange(yearOffset: Int): Triple<Long, Long, String> {
-        val cal = Calendar.getInstance()
-        val selectedYear = cal.get(Calendar.YEAR) + yearOffset
-        val startYear = (selectedYear - 5).coerceAtLeast(2020)
-        cal.set(Calendar.YEAR, startYear)
-        cal.set(Calendar.MONTH, Calendar.JANUARY)
-        cal.set(Calendar.DAY_OF_MONTH, 1)
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val startMs = cal.timeInMillis
-        cal.set(Calendar.YEAR, selectedYear)
-        cal.set(Calendar.MONTH, Calendar.DECEMBER)
-        cal.set(Calendar.DAY_OF_MONTH, 31)
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        val endMs = cal.timeInMillis
-        return Triple(startMs, endMs, "$selectedYear")
-    }
-
-    /** 연간 차트용: 연도별 (startMs,endMs) 리스트. 최대 6개. firstYear~selectedYear */
-    fun getYearRanges(yearOffset: Int, maxYears: Int = 6): Pair<List<Pair<Long, Long>>, List<String>> {
-        val cal = Calendar.getInstance()
-        val selectedYear = cal.get(Calendar.YEAR) + yearOffset
-        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-        val firstYear = (currentYear - maxYears + 1).coerceAtLeast(2020)
-        val startYear = (selectedYear - maxYears + 1).coerceAtLeast(firstYear)
-        val count = (selectedYear - startYear + 1).coerceIn(1, maxYears)
-        val ranges = (0 until count).map { i ->
-            val y = startYear + i
-            cal.set(Calendar.YEAR, y)
-            cal.set(Calendar.MONTH, Calendar.JANUARY)
-            cal.set(Calendar.DAY_OF_MONTH, 1)
-            cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
-            val startMs = cal.timeInMillis
-            cal.set(Calendar.MONTH, Calendar.DECEMBER)
-            cal.set(Calendar.DAY_OF_MONTH, 31)
-            cal.set(Calendar.HOUR_OF_DAY, 23)
-            cal.set(Calendar.MINUTE, 59)
-            cal.set(Calendar.SECOND, 59)
-            cal.set(Calendar.MILLISECOND, 999)
-            val endMs = cal.timeInMillis
-            Pair(startMs, endMs)
-        }
-        val labels = (0 until count).map { "${startYear + it}" }
-        return Pair(ranges, labels)
-    }
-
-    /** 월별(1~12월) 사용량 분. startMs~endMs는 해당 연도 1.1~12.31 */
-    fun loadMonthMinutes(context: Context, startMs: Long, endMs: Long): List<Long> {
-        if (!hasUsageAccess(context)) return List(12) { 0L }
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(12) { 0L }
-        val events = usm.queryEvents(startMs, endMs) ?: return List(12) { 0L }
-        val monthMinutes = LongArray(12)
-        val sessionStarts = mutableMapOf<String, Long>()
-        val event = UsageEvents.Event()
-        val cal = Calendar.getInstance()
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND ->
-                    sessionStarts[event.packageName + ":" + event.className] = event.timeStamp
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                    val key = event.packageName + ":" + event.className
-                    val start = sessionStarts.remove(key) ?: continue
-                    val durationMs = (event.timeStamp - start).coerceAtLeast(0)
-                    cal.timeInMillis = start
-                    val month = cal.get(Calendar.MONTH)
-                    monthMinutes[month] += durationMs / 60_000
-                }
-            }
-        }
-        return monthMinutes.toList()
-    }
-
-    /** 연도별 사용량 분. yearRanges: [(startMs, endMs)] 순. 최대 6개, 적으면 좌측정렬용 */
-    fun loadYearsMinutes(context: Context, yearRanges: List<Pair<Long, Long>>): List<Long> {
-        if (!hasUsageAccess(context)) return yearRanges.map { 0L }
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return yearRanges.map { 0L }
-        return yearRanges.map { (startMs, endMs) ->
-            val events = usm.queryEvents(startMs, endMs) ?: return@map 0L
-            var total = 0L
-            val sessionStarts = mutableMapOf<String, Long>()
-            val event = UsageEvents.Event()
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                when (event.eventType) {
-                    UsageEvents.Event.MOVE_TO_FOREGROUND ->
-                        sessionStarts[event.packageName + ":" + event.className] = event.timeStamp
-                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                        val key = event.packageName + ":" + event.className
-                        val startTs = sessionStarts.remove(key) ?: continue
-                        total += (event.timeStamp - startTs).coerceAtLeast(0) / 60_000
-                    }
-                }
-            }
-            total
-        }
-    }
-
-    /**
-     * 지난 1주일간 제한 앱별 "제한된 분" 합산.
-     * @param isTimeSpecified true=시간 지정 제한 탭, false=일일 사용량 제한 탭
-     * - 일일 사용량 제한: restricted = max(0, limitMinutes*7 - actualUsage). 제한 덕분에 사용하지 않은 시간.
-     * - 시간 지정 제한: block 구간 이력 없음, 0 반환 (추후 block 이벤트 추적 시 구현)
-     */
-    fun loadRestrictedMinutesPerApp(
-        context: Context,
-        startMs: Long,
-        endMs: Long,
-        restrictions: List<com.cole.app.model.AppRestriction>,
-        isTimeSpecified: Boolean,
-    ): Map<String, Long> {
-        val filtered = restrictions.filter { r ->
-            if (isTimeSpecified) r.blockUntilMs > 0 else r.blockUntilMs == 0L
-        }
-        if (filtered.isEmpty()) return emptyMap()
-
-        val appList = loadAppUsage(context, startMs, endMs)
-        val usageMsByPkg = appList.associate { it.packageName to it.usageMs }
-
-        return filtered.associate { r ->
-            val actualMinutes = (usageMsByPkg[r.packageName] ?: 0L) / 60_000
-            val restricted = if (isTimeSpecified) {
-                // 시간 지정: block 이력 없음, 추후 구현
-                0L
-            } else {
-                (r.limitMinutes * 7L - actualMinutes).coerceAtLeast(0)
-            }
-            r.packageName to restricted
-        }
     }
 
     /** 동일 주 전주 대비 요일별 비교: (이번주 7값, 저번주 7값) */
@@ -455,29 +290,12 @@ object StatisticsData {
             }
         }
 
-        val categoryByPackage = mapOf(
-            "com.instagram.android" to "SNS",
-            "com.facebook.katana" to "SNS",
-            "com.kakao.talk" to "SNS",
-            "com.netflix.mediaclient" to "OTT",
-            "com.google.android.youtube" to "OTT",
-            "com.wavve.android" to "OTT",
-            "com.tving.v2" to "OTT",
-            "com.ncsoft.lineagew" to "게임",
-            "com.airbnb.android" to "쇼핑",
-            "com.banhala.android" to "쇼핑",
-            "com.nhn.android.band" to "쇼핑",
-            "com.nhn.android.webtoon" to "웹툰",
-            "com.shinhan.sbanking" to "주식,코인",
-            "com.samsung.android.spay" to "주식,코인",
-        )
         return usageMs
             .filter { it.value > 0 }
             .map { (packageName, totalMs) ->
                 val name = try {
                     pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString()
                 } catch (_: PackageManager.NameNotFoundException) { packageName }
-                val categoryTag = categoryByPackage[packageName]
                 Pair(
                     StatsAppItem(
                         packageName = packageName,
@@ -485,8 +303,6 @@ object StatisticsData {
                         usageMinutes = "${DecimalFormat("#,###").format(totalMs / 60_000)}분",
                         sessionCount = "${sessionCounts[packageName] ?: 0}회",
                         isRestricted = packageName in restrictedPkgs,
-                        categoryTag = categoryTag,
-                        usageMs = totalMs,
                     ),
                     totalMs,
                 )

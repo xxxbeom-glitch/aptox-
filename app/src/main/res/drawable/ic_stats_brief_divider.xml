@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma 926:8043 Brief 카드 세로 구분선 (surface/border/info-box #e0e0e0) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="1dp"
+    android:height="16dp"
+    android:viewportWidth="1"
+    android:viewportHeight="16">
+    <path
+        android:fillColor="#E0E0E0"
+        android:pathData="M0,0 h1 v16 h-1 z" />
+</vector>
