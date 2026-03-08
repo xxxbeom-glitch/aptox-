@@ -2,6 +2,7 @@ package com.cole.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,7 +73,7 @@ fun ColeBottomNavBar(
                 Column(
                     modifier = Modifier
                         .width(42.dp)
-                        .clickable { onTabSelected(index) },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onTabSelected(index) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
@@ -101,7 +103,7 @@ fun ColeBottomNavBar(
                     .height(42.dp)
                     .background(Color(0xFF2B2B2B))
                     .then(
-                        if (onPremiumClick != null) Modifier.clickable { onPremiumClick() }
+                        if (onPremiumClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPremiumClick() }
                         else Modifier
                     )
                     .padding(horizontal = 16.dp),
@@ -160,7 +162,7 @@ fun ColeHeaderHome(
                 modifier = Modifier
                     .size(36.dp)
                     .then(
-                        if (onNotificationClick != null) Modifier.clickable { onNotificationClick() }
+                        if (onNotificationClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNotificationClick() }
                         else Modifier
                     ),
                 contentAlignment = Alignment.Center,
@@ -218,7 +220,7 @@ fun ColeHeaderTitleWithNotification(
                 modifier = Modifier
                     .size(36.dp)
                     .then(
-                        if (onNotificationClick != null) Modifier.clickable { onNotificationClick() }
+                        if (onNotificationClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNotificationClick() }
                         else Modifier
                     ),
                 contentAlignment = Alignment.Center,
@@ -277,7 +279,7 @@ fun ColeHeaderSub(
                         contentDescription = "뒤로가기",
                         modifier = Modifier
                             .size(36.dp)
-                            .clickable(enabled = onBackClick != null) { onBackClick?.invoke() },
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = onBackClick != null) { onBackClick?.invoke() },
                         tint = AppColors.TextPrimary,
                     )
                 } else {
@@ -297,8 +299,8 @@ fun ColeHeaderSub(
                     .size(36.dp)
                     .then(
                         when {
-                            showNotification && onNotificationClick != null -> Modifier.clickable { onNotificationClick() }
-                            actionIcon != null && onActionClick != null -> Modifier.clickable { onActionClick() }
+                            showNotification && onNotificationClick != null -> Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNotificationClick() }
+                            actionIcon != null && onActionClick != null -> Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onActionClick() }
                             else -> Modifier
                         }
                     ),
@@ -394,7 +396,7 @@ fun ColeSegmentedTab(
                             if (isSelected) AppColors.InteractiveTabSelected
                             else AppColors.InteractiveTabUnselected
                         )
-                        .clickable { onTabSelected(index) },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onTabSelected(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

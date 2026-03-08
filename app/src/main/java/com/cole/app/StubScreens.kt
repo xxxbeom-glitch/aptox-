@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -120,12 +121,8 @@ fun OnboardingScreen(onSkipClick: () -> Unit, onStartClick: () -> Unit) {
 }
 
 // MA-01 메인 화면 (Figma 336-2910)
-private val MAIN_DAY_LABELS = listOf("수", "목", "금", "토", "일", "월", "화")
 private val MainCardShape = RoundedCornerShape(12.dp)
 private val MainCardShadowColor = Color.Black.copy(alpha = 0.06f)
-
-// 목업: 일별 완료(이모지) / 미완료(날짜숫자)
-private data class MainDayItem(val label: String, val isCompleted: Boolean, val emojiOrDay: String)
 
 /** 제한 방식: 시간 지정 vs 일일 사용량 */
 internal enum class RestrictionType {
@@ -168,51 +165,37 @@ internal data class MainAppRestrictionItem(
     val pauseLeftMin: Int = 0,
 )
 
-private val MainDayAreaSize = 42.dp
-private val MainDayCircleSize = 32.dp
-
+/** MA-01: 코멘트 + 서브텍스트 + > 통계 이동 (Figma 932:9099) */
 @Composable
-private fun MainDailyProgressSection(
-    days: List<MainDayItem>,
+private fun MainCommentSection(
+    comment: String,
+    subtext: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            MAIN_DAY_LABELS.forEachIndexed { i, label ->
-                val item = days.getOrNull(i) ?: MainDayItem(label, false, "")
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Box(
-                        modifier = Modifier.size(MainDayAreaSize),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(MainDayCircleSize)
-                                .clip(CircleShape)
-                                .background(if (item.isCompleted) AppColors.Primary300 else AppColors.Primary200),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = item.emojiOrDay,
-                                style = AppTypography.Caption1.copy(
-                                    color = if (item.isCompleted) AppColors.TextInvert else AppColors.TextBody,
-                                    textAlign = TextAlign.Center,
-                                ),
-                            )
-                        }
-                    }
-                    Text(
-                        text = label,
-                        style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = comment,
+                style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = subtext,
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextTertiary),
+            )
         }
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right),
+            contentDescription = "통계 보기",
+            tint = AppColors.TextSecondary,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
@@ -258,7 +241,7 @@ private fun MainAppRestrictionRow(
                 .clip(RoundedCornerShape(6.dp))
                 .background(AppColors.ButtonSecondaryBgDefault)
                 .border(0.6.dp, AppColors.ButtonSecondaryBorderDefault, RoundedCornerShape(6.dp))
-                .clickable { onDetailClick() }
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDetailClick() }
                 .padding(horizontal = 12.dp, vertical = 9.dp),
         ) {
             Text(text = "자세히 보기", style = AppTypography.ButtonSmall.copy(color = AppColors.ButtonSecondaryTextDefault))
@@ -317,7 +300,7 @@ private fun MainPermissionBanner(
             .fillMaxWidth()
             .clip(MainCardShape)
             .background(AppColors.Grey200)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -430,12 +413,13 @@ private sealed class SettingsDetail(val title: String) {
     data object OpenSource : SettingsDetail("오픈소스 라이센스")
 }
 
-/** MA-01 메인 화면: 실제 AppRestrictionRepository 데이터 사용 */
+/** MA-01 메인 화면: 실제 AppRestrictionRepository 데이터 사용 (Figma 336-2910) */
 @Composable
 internal fun MainScreenMA01(
     onAddAppClick: () -> Unit,
     onPermissionClick: () -> Unit = {},
     onDetailClick: (MainAppRestrictionItem) -> Unit = {},
+    onStatisticsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -453,16 +437,6 @@ internal fun MainScreenMA01(
         }
     }
 
-    val mockDaysMA01 = listOf(
-        MainDayItem("수", true, "👍"),
-        MainDayItem("목", true, "👍"),
-        MainDayItem("금", true, "😥"),
-        MainDayItem("토", true, "👍"),
-        MainDayItem("일", false, "15"),
-        MainDayItem("월", false, "16"),
-        MainDayItem("화", false, "17"),
-    )
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -472,18 +446,11 @@ internal fun MainScreenMA01(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         MainPermissionBanner(onClick = onPermissionClick)
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(6.dp, MainCardShape, false, MainCardShadowColor, MainCardShadowColor)
-                    .clip(MainCardShape)
-                    .background(AppColors.SurfaceBackgroundCard)
-                    .padding(16.dp),
-            ) {
-                MainDailyProgressSection(days = mockDaysMA01)
-            }
-        }
+        MainCommentSection(
+            comment = "최근 인스타그램의 사용시간이\n늘어나고 있어요!",
+            subtext = "약간의 제한이 필요해요",
+            onClick = onStatisticsClick,
+        )
 
         if (restrictionItems.isEmpty()) {
             MainAppRestrictionCardEmpty(
@@ -614,18 +581,9 @@ private fun getTodaySessionCount(usm: UsageStatsManager, packageName: String): L
 @Composable
 fun MainScreenMA02(
     onAddAppClick: () -> Unit,
+    onStatisticsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val mockDaysMA02 = listOf(
-        MainDayItem("수", false, "11"),
-        MainDayItem("목", false, "12"),
-        MainDayItem("금", false, "13"),
-        MainDayItem("토", false, "14"),
-        MainDayItem("일", false, "15"),
-        MainDayItem("월", false, "16"),
-        MainDayItem("화", false, "17"),
-    )
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -634,18 +592,11 @@ fun MainScreenMA02(
             .padding(top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(6.dp, MainCardShape, false, MainCardShadowColor, MainCardShadowColor)
-                    .clip(MainCardShape)
-                    .background(AppColors.SurfaceBackgroundCard)
-                    .padding(16.dp),
-            ) {
-                MainDailyProgressSection(days = mockDaysMA02)
-            }
-        }
+        MainCommentSection(
+            comment = "최근 인스타그램의 사용시간이\n늘어나고 있어요!",
+            subtext = "약간의 제한이 필요해요",
+            onClick = onStatisticsClick,
+        )
         MainAppRestrictionCardEmpty(onAddAppClick = onAddAppClick)
         Spacer(modifier = Modifier.height(20.dp))
     }
@@ -695,9 +646,9 @@ fun MainFlowHost(
                 .padding(top = 18.dp)
                 .padding(bottom = if (bottomBarHeightDp > 0.dp) bottomBarHeightDp else 122.dp),
         ) {
-        // 헤더
+        // 헤더 (설정 2차뎁스일 때만 Sub 헤더; 탭 전환 시 settingsDetail 초기화됨)
         when {
-            settingsDetail != null -> ColeHeaderSub(
+            navIndex == 3 && settingsDetail != null -> ColeHeaderSub(
                 title = settingsDetail!!.title,
                 backIcon = painterResource(R.drawable.ic_back),
                 onBackClick = { settingsDetail = null },
@@ -738,6 +689,7 @@ fun MainFlowHost(
                             selectedAppForDetail = item
                             showAppLimitInfoSheet = true
                         },
+                        onStatisticsClick = { navIndex = 2 },
                     )
                 }
             }
@@ -820,7 +772,12 @@ fun MainFlowHost(
             ColeBottomNavBar(
                 destinations = navDestinations,
                 selectedIndex = navIndex,
-                onTabSelected = { navIndex = it },
+                onTabSelected = {
+                    if (it != navIndex) {
+                        navIndex = it
+                        if (it != 3) settingsDetail = null
+                    }
+                },
                 showPremiumBanner = isFreeUser,
                 onPremiumClick = { if (isFreeUser) showSubscriptionGuide = true },
             )

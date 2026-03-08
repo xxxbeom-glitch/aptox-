@@ -3,6 +3,7 @@ package com.cole.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -142,7 +144,7 @@ fun AppStatusRow(
                         .clip(RoundedCornerShape(6.dp))
                         .background(AppColors.ButtonSecondaryBgDefault)
                         .border(0.6.dp, AppColors.ButtonSecondaryBorderDefault, RoundedCornerShape(6.dp))
-                        .clickable { onDetailClick() }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDetailClick() }
                         .padding(horizontal = 12.dp, vertical = 9.dp),
                 ) {
                     Text(text = "자세히 보기", style = AppTypography.ButtonSmall.copy(color = AppColors.ButtonSecondaryTextDefault))
@@ -253,7 +255,7 @@ fun SelectionRow(
             .then(
                 when {
                     variant == SelectionRowVariant.Switch && onSwitchChange != null -> Modifier
-                    onClick != null -> Modifier.clickable { onClick() }
+                    onClick != null -> Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
                     else -> Modifier
                 }
             )
@@ -314,7 +316,7 @@ fun SettingsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -358,7 +360,7 @@ fun SettingsRowWithBadge(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -422,7 +424,7 @@ fun SettingsRowWithValue(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(if (onClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -469,7 +471,7 @@ fun SimpleTextRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(if (onClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

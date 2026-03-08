@@ -3,6 +3,7 @@ package com.cole.app
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -613,7 +614,7 @@ private fun DebugMenuScreen(
                             if (isSelected) AppColors.Primary300
                             else AppColors.Grey200
                         )
-                        .clickable { selectedTab = index }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selectedTab = index }
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                 ) {
                     Text(
@@ -687,7 +688,7 @@ private fun DebugScreenListSection(
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(AppColors.Primary300)
-                        .clickable { onScreenSelect(screen) }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onScreenSelect(screen) }
                         .padding(16.dp),
                 ) {
                     Text(
@@ -714,7 +715,7 @@ private fun DebugScreenListSection(
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(AppColors.Primary300)
-                        .clickable { onScreenSelect(screen) }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onScreenSelect(screen) }
                         .padding(12.dp),
                 ) {
                     Text(
@@ -772,7 +773,7 @@ private fun DebugScreenListSection(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(AppColors.SurfaceBackgroundCard)
-                        .clickable { onScreenSelect(screen) }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onScreenSelect(screen) }
                         .padding(16.dp),
                 ) {
                     Text(
@@ -840,7 +841,7 @@ private fun DebugDesignSystemSection() {
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(AppColors.SurfaceBackgroundCard)
-                        .clickable { selectedSection = section }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selectedSection = section }
                         .padding(16.dp),
                 ) {
                     Text(
@@ -1345,7 +1346,7 @@ private fun SettingItem(
                             if (isSelected) AppColors.Primary300
                             else AppColors.Grey200
                         )
-                        .clickable { onSelect(index) }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {

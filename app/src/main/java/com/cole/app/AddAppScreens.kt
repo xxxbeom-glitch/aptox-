@@ -3,6 +3,7 @@ package com.cole.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -384,7 +385,7 @@ fun AddAppSelectBottomSheet(
                             .then(
                                 if (isDisabled) Modifier.alpha(0.5f) else Modifier
                             )
-                            .clickable(enabled = !isSelfApp && !isAlreadyRestricted) {
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !isSelfApp && !isAlreadyRestricted) {
                                 if (!isSelfApp && !isAlreadyRestricted) tryToggleApp(appName)
                             },
                         verticalAlignment = Alignment.CenterVertically,

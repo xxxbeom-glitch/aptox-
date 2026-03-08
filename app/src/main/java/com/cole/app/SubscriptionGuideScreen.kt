@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -94,7 +96,7 @@ fun SubscriptionGuideScreen(
                 contentDescription = "닫기",
                 modifier = Modifier
                     .size(36.dp)
-                    .clickable { onClose() },
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
                 tint = Color.Unspecified,
             )
         }
@@ -225,7 +227,7 @@ fun SubscriptionGuideScreen(
                 .height(ctaHeight)
                 .background(AppColors.Primary300)
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .clickable { onSubscribeClick(selectedPlan == 0) },
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSubscribeClick(selectedPlan == 0) },
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -277,7 +279,7 @@ private fun SubscriptionPlanCard(
                 .clip(RoundedCornerShape(12.dp))
                 .background(actualBg)
                 .border(borderWidth, borderColorFinal, RoundedCornerShape(12.dp))
-                .clickable { onClick() },
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() },
         ) {
             Row(
                 modifier = Modifier

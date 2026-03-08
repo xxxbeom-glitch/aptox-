@@ -2,7 +2,12 @@ package com.cole.app
 
 import android.app.Application
 import android.util.Log
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.cole.app.usage.UsageStatsSyncWorker
 import com.kakao.sdk.common.KakaoSdk
+import java.util.concurrent.TimeUnit
 
 class ColeApplication : Application() {
 
@@ -18,6 +23,7 @@ class ColeApplication : Application() {
         } catch (e: Throwable) {
             Log.e(TAG, "AppMonitor 시작 실패", e)
         }
+        scheduleUsageStatsSync()
     }
 
     private fun startAppMonitorIfNeeded() {
@@ -26,6 +32,41 @@ class ColeApplication : Application() {
         if (map.isNotEmpty()) {
             AppMonitorService.start(this, map)
         }
+    }
+
+    private fun scheduleUsageStatsSync() {
+        val workManager = WorkManager.getInstance(this)
+        val dailyRequest = PeriodicWorkRequestBuilder<UsageStatsSyncWorker>(1, TimeUnit.DAYS)
+            .setInitialDelay(computeInitialDelayTo0010(), TimeUnit.MILLISECONDS)
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            "usage_stats_daily_sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            dailyRequest,
+        )
+        if (StatisticsData.hasUsageAccess(this)) {
+            val initialRequest = androidx.work.OneTimeWorkRequestBuilder<UsageStatsSyncWorker>()
+                .setInputData(androidx.work.workDataOf(UsageStatsSyncWorker.KEY_INITIAL_SYNC to true))
+                .build()
+            workManager.enqueueUniqueWork(
+                "usage_stats_initial_sync",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                initialRequest,
+            )
+        }
+    }
+
+    /** 00:10 KST까지의 초기 지연 시간(ms) */
+    private fun computeInitialDelayTo0010(): Long {
+        val cal = java.util.Calendar.getInstance()
+        val now = cal.timeInMillis
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 10)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        var target = cal.timeInMillis
+        if (target <= now) target += 24 * 60 * 60 * 1000L
+        return target - now
     }
 
     companion object {

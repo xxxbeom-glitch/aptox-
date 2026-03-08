@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,23 +16,31 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,10 +52,28 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** 통계 카드 도움말 바텀시트 타입 (Figma 932-8989, 932-8868, 932-8974) */
+private enum class StatsHelpType(val title: String, val body: String) {
+    DATE_CHART(
+        "기간별 사용량",
+        "주간은 요일별, 월간은 1~12월, 연간은 최대 6년 기준으로 앱 사용량을 보여줘요. 오른쪽 화살표로 과거 기간을 선택할 수 있어요.",
+    ),
+    CATEGORY(
+        "카테고리 통계",
+        "앱을 카테고리별로 묶어 사용 비율을 보여줘요. 상단 막대와 범례를 탭하면 해당 카테고리 앱만 필터할 수 있어요.",
+    ),
+    RESTRICTION(
+        "제한 앱 분석",
+        "시간 지정 제한과 일일 사용량 제한으로 설정한 앱의 사용 현황을 확인할 수 있어요. 제한을 잘 지킨 앱과 사용량을 한눈에 볼 수 있어요.",
+    ),
+}
 
 /** 통계 카드 공통 패딩(모든 카드 동일) */
 private val StatsCardPadding = 16.dp
@@ -69,6 +96,17 @@ fun StatisticsScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (StatisticsData.hasUsageAccess(context)) {
+            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                "usage_stats_initial_sync",
+                androidx.work.ExistingWorkPolicy.KEEP,
+                androidx.work.OneTimeWorkRequestBuilder<com.cole.app.usage.UsageStatsSyncWorker>()
+                    .setInputData(androidx.work.workDataOf(com.cole.app.usage.UsageStatsSyncWorker.KEY_INITIAL_SYNC to true))
+                    .build(),
+            )
+        }
+    }
     var selectedTab by remember { mutableIntStateOf(0) } // 기본 주간
     val tabLabels = listOf("주간", "월간", "연간")
     val tabEnum = when (selectedTab) {
@@ -79,15 +117,19 @@ fun StatisticsScreen(
 
     // 카드별 독립적인 주/연도 네비게이션
     var weekOffsetDateChart by remember { mutableIntStateOf(0) }
-    var yearOffsetDateChart by remember { mutableIntStateOf(0) }  // 월간/연간용 (0=올해)
+    var yearOffsetDateChart by remember { mutableIntStateOf(0) }
     var weekOffsetCategory by remember { mutableIntStateOf(0) }
+    var yearOffsetCategory by remember { mutableIntStateOf(0) }
     var weekOffsetRestriction by remember { mutableIntStateOf(0) }
+    var yearOffsetRestriction by remember { mutableIntStateOf(0) }
     var weekOffsetComparison by remember { mutableIntStateOf(0) }
+    var yearOffsetComparison by remember { mutableIntStateOf(0) }
 
     val restrictedApps = remember { AppRestrictionRepository(context).getAll() }
     var restrictionFilter by remember { mutableIntStateOf(0) } // 0=시간 지정, 1=일일
     val timeSpecifiedApps = restrictedApps.filter { it.blockUntilMs > 0 }
     val dailyLimitApps = restrictedApps.filter { it.blockUntilMs == 0L }
+    var showHelpSheet by remember { mutableStateOf<StatsHelpType?>(null) }
 
     Column(
         modifier = modifier
@@ -103,49 +145,134 @@ fun StatisticsScreen(
             onTabSelected = { selectedTab = it },
         )
 
+        StatsInsightCard(tabEnum = tabEnum)
         StatsDateChartSection(
             tabEnum = tabEnum,
             weekOffset = weekOffsetDateChart,
             onWeekChange = { weekOffsetDateChart = it },
             yearOffset = yearOffsetDateChart,
             onYearChange = { yearOffsetDateChart = it },
+            onInfoClick = { showHelpSheet = StatsHelpType.DATE_CHART },
         )
-        if (tabEnum == StatisticsData.Tab.WEEKLY) {
-            StatsInsightCard()
-            StatsStackedBarAndAppList(
-                tabEnum = tabEnum,
-                weekOffset = weekOffsetCategory,
-                onWeekChange = { weekOffsetCategory = it },
+        StatsStackedBarAndAppList(
+            tabEnum = tabEnum,
+            weekOffset = weekOffsetCategory,
+            onWeekChange = { weekOffsetCategory = it },
+            yearOffset = yearOffsetCategory,
+            onYearChange = { yearOffsetCategory = it },
+            onInfoClick = { showHelpSheet = StatsHelpType.CATEGORY },
+        )
+        StatsRestrictionSection(
+            tabEnum = tabEnum,
+            weekOffset = weekOffsetRestriction,
+            onWeekChange = { weekOffsetRestriction = it },
+            yearOffset = yearOffsetRestriction,
+            onYearChange = { yearOffsetRestriction = it },
+            filterIndex = restrictionFilter,
+            onFilterChange = { restrictionFilter = it },
+            timeSpecifiedApps = timeSpecifiedApps,
+            dailyLimitApps = dailyLimitApps,
+            onInfoClick = { showHelpSheet = StatsHelpType.RESTRICTION },
+        )
+        StatsGroupedBarSection(
+            tabEnum = tabEnum,
+            weekOffset = weekOffsetComparison,
+            onWeekChange = { weekOffsetComparison = it },
+            yearOffset = yearOffsetComparison,
+            onYearChange = { yearOffsetComparison = it },
+        )
+    }
+
+    showHelpSheet?.let { helpType ->
+        StatsCardHelpBottomSheet(
+            title = helpType.title,
+            body = helpType.body,
+            onDismiss = { showHelpSheet = null },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StatsCardHelpBottomSheet(
+    title: String,
+    body: String,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = AppColors.SurfaceBackgroundBackground,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars),
+        ) {
+            Spacer(modifier = Modifier.height(40.dp))
+            Text(
+                text = title,
+                style = AppTypography.HeadingH1.copy(color = AppColors.TextPrimary),
             )
-            StatsRestrictionSection(
-                weekOffset = weekOffsetRestriction,
-                onWeekChange = { weekOffsetRestriction = it },
-                filterIndex = restrictionFilter,
-                onFilterChange = { restrictionFilter = it },
-                timeSpecifiedApps = timeSpecifiedApps,
-                dailyLimitApps = dailyLimitApps,
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = body,
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),
             )
-            StatsGroupedBarSection(
-                weekOffset = weekOffsetComparison,
-                onWeekChange = { weekOffsetComparison = it },
+            Spacer(modifier = Modifier.height(36.dp))
+            ColePrimaryButton(
+                text = "확인",
+                onClick = {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) onDismiss()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
             )
-        }
-        if (tabEnum == StatisticsData.Tab.MONTHLY || tabEnum == StatisticsData.Tab.YEARLY) {
-            StatsLegacyContent(
-                tabEnum = tabEnum,
-            )
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
+
+/** Brief 카드 탭별 제목/본문/통계 라벨 */
+private val BriefContentByTab = mapOf(
+    StatisticsData.Tab.WEEKLY to Triple(
+        "지난주와 비슷한 한 주예요",
+        "지난주와 비슷한 패턴이에요. 꾸준히 유지하고 있다는 것 자체가 대단해요. 한 가지만 더 개선한다면 저녁 시간대 사용을 줄여보세요.",
+        "연속 달성일" to "56일",
+    ),
+    StatisticsData.Tab.MONTHLY to Triple(
+        "지난달과 비슷한 한 달이에요",
+        "지난달과 비슷한 패턴이에요. 꾸준히 유지하고 있다는 것 자체가 대단해요. 한 가지만 더 개선한다면 월 중순 사용을 줄여보세요.",
+        "연속 달성주" to "8주",
+    ),
+    StatisticsData.Tab.YEARLY to Triple(
+        "지난해와 비슷한 한 해예요",
+        "지난해와 비슷한 패턴이에요. 꾸준히 유지하고 있다는 것 자체가 대단해요. 한 가지만 더 개선한다면 분기별 사용을 줄여보세요.",
+        "연속 달성달" to "6달",
+    ),
+)
 
 /**
  * Figma 926:8043 Brief 카드
  * - 카드: 흰 배경, primary-300 테두리
  * - 상단: Brief + 제목 (gap 2dp), 본문 (gap 12dp)
- * - 하단 통계 박스: Grey100 배경, 연속 달성일/달성율/유지율
+ * - 하단 통계 박스: Grey100 배경, 연속 달성일/주/달·달성율·유지율
  */
 @Composable
-private fun StatsInsightCard(modifier: Modifier = Modifier) {
+private fun StatsInsightCard(
+    tabEnum: StatisticsData.Tab = StatisticsData.Tab.WEEKLY,
+    modifier: Modifier = Modifier,
+) {
+    val content = BriefContentByTab[tabEnum] ?: BriefContentByTab[StatisticsData.Tab.WEEKLY]!!
+    val (title, body, statPair) = content
+    val (stat1Label, stat1Value) = statPair
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -153,29 +280,29 @@ private fun StatsInsightCard(modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
             .border(1.dp, AppColors.Primary300, RoundedCornerShape(12.dp))
-            .padding(StatsCardPadding),
+            .padding(top = 26.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(StatsCardContentSpacing),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(StatsCardListItemSpacing),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = "Brief",
                     style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
                 )
                 Text(
-                    text = "지난주와 비슷한 한 주예요",
+                    text = title,
                     style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
                 )
             }
             Text(
-                text = "지난주와 비슷한 패턴이에요. 꾸준히 유지하고 있다는 것 자체가 대단해요. 한 가지만 더 개선한다면 저녁 시간대 사용을 줄여보세요.",
+                text = body,
                 style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
             )
         }
-        StatsInsightStatBox()
+        StatsInsightStatBox(stat1Label = stat1Label, stat1Value = stat1Value)
     }
 }
 
@@ -192,7 +319,11 @@ private fun IcoStatsBriefDivider(modifier: Modifier = Modifier) {
 
 /** Figma 926:8095 — Grey100 배경, 83dp 높이, 구분선 */
 @Composable
-private fun StatsInsightStatBox(modifier: Modifier = Modifier) {
+private fun StatsInsightStatBox(
+    stat1Label: String = "연속 달성일",
+    stat1Value: String = "56일",
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -204,7 +335,7 @@ private fun StatsInsightStatBox(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatsInsightStatItem(label = "연속 달성일", value = "56일")
+        StatsInsightStatItem(label = stat1Label, value = stat1Value)
         IcoStatsBriefDivider()
         StatsInsightStatItem(label = "달성율", value = "65%")
         IcoStatsBriefDivider()
@@ -245,6 +376,7 @@ private fun StatsDateChartSection(
     onWeekChange: (Int) -> Unit,
     yearOffset: Int,
     onYearChange: (Int) -> Unit,
+    onInfoClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -275,16 +407,13 @@ private fun StatsDateChartSection(
         }
     }
 
-    val nav = when (tabEnum) {
-        StatisticsData.Tab.WEEKLY -> {
-            val (_, _, txt) = remember(weekOffset) { StatisticsData.getWeekRange(weekOffset) }
-            NavState(txt, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) })
+    val nav = remember(tabEnum, weekOffset, yearOffset) {
+        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+        when (tabEnum) {
+            StatisticsData.Tab.WEEKLY -> NavState(label, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) })
+            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
+            else -> NavState("", false, false, {}, {})
         }
-        StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> {
-            val yr = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + yearOffset
-            NavState("$yr", true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
-        }
-        else -> NavState("", false, false, {}, {})
     }
 
     Column(
@@ -293,16 +422,19 @@ private fun StatsDateChartSection(
             .shadow(6.dp, RoundedCornerShape(12.dp), false, Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.06f))
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
-            .padding(StatsCardPadding),
-        verticalArrangement = Arrangement.spacedBy(StatsCardContentSpacing),
+            .padding(horizontal = 16.dp, vertical = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         StatsCardTitleRow(
             title = "기간별 사용량",
+            titleIconSpacing = 4.dp,
             dateRangeText = nav.text,
             canGoPrev = nav.canPrev,
             canGoNext = nav.canNext,
             onPrevClick = nav.onPrev,
             onNextClick = nav.onNext,
+            onInfoClick = onInfoClick,
+            showPeriodSelector = tabEnum != StatisticsData.Tab.YEARLY,
         )
         when (tabEnum) {
             StatisticsData.Tab.WEEKLY -> DayOfWeekBarChart(
@@ -313,11 +445,16 @@ private fun StatsDateChartSection(
                 values = monthMinutes,
                 isCurrentYear = yearOffset == 0,
             )
-            StatisticsData.Tab.YEARLY -> YearBarChart(
-                values = yearMinutes,
-                labels = yearLabels,
-                isCurrentYear = yearOffset == 0,
-            )
+            StatisticsData.Tab.YEARLY -> {
+                val indicesWithData = yearMinutes.indices.filter { yearMinutes[it] > 0L }
+                val displayValues = if (indicesWithData.isEmpty()) yearMinutes else indicesWithData.map { yearMinutes[it] }
+                val displayLabels = if (indicesWithData.isEmpty()) yearLabels else indicesWithData.map { yearLabels[it] }
+                YearBarChart(
+                    values = displayValues,
+                    labels = displayLabels,
+                    isCurrentYear = yearOffset == 0,
+                )
+            }
             else -> {}
         }
     }
@@ -331,6 +468,26 @@ private data class NavState(
     val onNext: () -> Unit,
 )
 
+/** 우측 날짜/기간 표기: 주간="이번 주"/"N주 전", 월간/연간="2025년"/"2024년" 등 */
+private fun formatPeriodLabel(tabEnum: StatisticsData.Tab, weekOffset: Int, yearOffset: Int): String = when (tabEnum) {
+    StatisticsData.Tab.WEEKLY -> when (weekOffset) {
+        0 -> "이번 주"
+        else -> "${-weekOffset}주 전"
+    }
+    StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> {
+        val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + yearOffset
+        "${year}년"
+    }
+    else -> ""
+}
+
+private data class ComparisonBarState(
+    val label: String,
+    val barCount: Int,
+    val labels: List<String>,
+    val nav: NavState,
+)
+
 /** 카드 제목 + 날짜 범위 Row (스크린샷: 제목 좌측, 날짜+화살표 우측) */
 @Composable
 private fun StatsCardTitleRow(
@@ -340,6 +497,9 @@ private fun StatsCardTitleRow(
     canGoNext: Boolean,
     onPrevClick: () -> Unit,
     onNextClick: () -> Unit,
+    titleIconSpacing: Dp = 2.dp,
+    onInfoClick: (() -> Unit)? = null,
+    showPeriodSelector: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -349,14 +509,22 @@ private fun StatsCardTitleRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(titleIconSpacing),
         ) {
             Text(
                 text = title,
                 style = AppTypography.HeadingH2.copy(color = AppColors.TextSecondary),
             )
-            IcoDisclaimerInfo(modifier = Modifier.size(16.dp))
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(16.dp)
+                    .then(if (onInfoClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onInfoClick() } else Modifier),
+            ) {
+                IcoDisclaimerInfo(modifier = Modifier.size(16.dp))
+            }
         }
+        if (showPeriodSelector) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -364,7 +532,7 @@ private fun StatsCardTitleRow(
             Box(
                 modifier = Modifier
                     .size(22.dp)
-                    .then(if (canGoPrev) Modifier.clickable { onPrevClick() } else Modifier),
+                    .then(if (canGoPrev) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPrevClick() } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 IcoNavLeft(enabled = canGoPrev, size = 22.dp)
@@ -376,11 +544,12 @@ private fun StatsCardTitleRow(
             Box(
                 modifier = Modifier
                     .size(22.dp)
-                    .then(if (canGoNext) Modifier.clickable { onNextClick() } else Modifier),
+                    .then(if (canGoNext) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNextClick() } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 IcoNavRight(enabled = canGoNext, size = 22.dp)
             }
+        }
         }
     }
 }
@@ -408,7 +577,7 @@ private fun StatsDateRangeRow(
             Box(
                 modifier = Modifier
                     .size(22.dp)
-                    .then(if (canGoPrev) Modifier.clickable { onPrevClick() } else Modifier),
+                    .then(if (canGoPrev) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onPrevClick() } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 IcoNavLeft(enabled = canGoPrev, size = 22.dp)
@@ -420,7 +589,7 @@ private fun StatsDateRangeRow(
             Box(
                 modifier = Modifier
                     .size(22.dp)
-                    .then(if (canGoNext) Modifier.clickable { onNextClick() } else Modifier),
+                    .then(if (canGoNext) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNextClick() } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 IcoNavRight(enabled = canGoNext, size = 22.dp)
@@ -512,7 +681,7 @@ private fun DayOfWeekBarChart(
 
 /** Figma 919:3764 — 월간: 1~12월, 막대 16dp. 이번 달만 Primary */
 private val MonthBarWidth = 16.dp
-private val MonthLabels = (1..12).map { "$it" }
+private val MonthLabels = (1..12).map { "${it}월" }
 
 @Composable
 private fun MonthBarChart(
@@ -600,6 +769,7 @@ private fun YearBarChart(
     modifier: Modifier = Modifier,
 ) {
     val count = values.size.coerceAtLeast(1)
+    val useFlexWidth = count <= 4
     val maxVal = values.maxOrNull()?.takeIf { it > 0 } ?: 1L
     val normalized = values.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
@@ -638,18 +808,18 @@ private fun YearBarChart(
                     val year = yearStr.toIntOrNull() ?: 0
                     val isHighlight = isCurrentYear && year == currentYear && value > 0f
                     Column(
-                        modifier = Modifier.width(YearBarWidth),
+                        modifier = if (useFlexWidth) Modifier.weight(1f) else Modifier.width(YearBarWidth),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(YearBarWidth)
+                                .then(if (useFlexWidth) Modifier.fillMaxWidth() else Modifier.width(YearBarWidth))
                                 .fillMaxHeight(),
                             contentAlignment = Alignment.BottomCenter,
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(YearBarWidth)
+                                    .then(if (useFlexWidth) Modifier.fillMaxWidth() else Modifier.width(YearBarWidth))
                                     .fillMaxHeight(value)
                                     .clip(RoundedCornerShape(BarCornerRadius))
                                     .background(
@@ -669,7 +839,7 @@ private fun YearBarChart(
         ) {
             displayLabels.take(count).forEach { label ->
                 Box(
-                    modifier = Modifier.width(YearBarWidth),
+                    modifier = if (useFlexWidth) Modifier.weight(1f) else Modifier.width(YearBarWidth),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -693,31 +863,93 @@ private val CategoryColors = mapOf(
     "주식,코인" to Color(0xFF3D9E5D),
 )
 
+/** Figma 925:7299 — 카테고리 통계 디자인용 더미 앱 목록 (usageMs로 OTT36/SNS20/게임19/쇼핑18/웹툰15/주식코인2% 비율) */
+private val CategoryStatsDummyApps = listOf(
+    StatisticsData.StatsAppItem(
+        packageName = "com.instagram.android",
+        name = "Instagram",
+        usageMinutes = "1,688분",
+        sessionCount = "0회",
+        isRestricted = true,
+        categoryTag = "SNS",
+        usageMs = 20_000_000L,
+        isWarning = false,
+    ),
+    StatisticsData.StatsAppItem(
+        packageName = "com.netflix.mediaclient",
+        name = "넷플릭스",
+        usageMinutes = "1,200분",
+        sessionCount = "0회",
+        isRestricted = false,
+        categoryTag = "OTT",
+        usageMs = 36_000_000L,
+        isWarning = true,
+    ),
+    StatisticsData.StatsAppItem(
+        packageName = "com.ncsoft.lineagew",
+        name = "리니지W",
+        usageMinutes = "1,001분",
+        sessionCount = "0회",
+        isRestricted = false,
+        categoryTag = "게임",
+        usageMs = 19_000_000L,
+        isWarning = false,
+    ),
+    StatisticsData.StatsAppItem(
+        packageName = "com.banhala.android",
+        name = "에이블리",
+        usageMinutes = "880분",
+        sessionCount = "0회",
+        isRestricted = false,
+        categoryTag = "쇼핑",
+        usageMs = 18_000_000L,
+        isWarning = false,
+    ),
+    StatisticsData.StatsAppItem(
+        packageName = "com.nhn.android.webtoon",
+        name = "네이버 웹툰",
+        usageMinutes = "726분",
+        sessionCount = "0회",
+        isRestricted = false,
+        categoryTag = "웹툰",
+        usageMs = 15_000_000L,
+        isWarning = false,
+    ),
+    StatisticsData.StatsAppItem(
+        packageName = "com.shinhan.sbanking",
+        name = "신한투자증권",
+        usageMinutes = "380분",
+        sessionCount = "0회",
+        isRestricted = false,
+        categoryTag = "주식,코인",
+        usageMs = 2_000_000L,
+        isWarning = false,
+    ),
+)
+
 /** Figma 925:7299 — 카테고리 통계. 그래프/범례 클릭 시 해당 카테고리 앱 필터. 기본 전체 */
 @Composable
 private fun StatsStackedBarAndAppList(
     tabEnum: StatisticsData.Tab,
     weekOffset: Int,
     onWeekChange: (Int) -> Unit,
+    yearOffset: Int,
+    onYearChange: (Int) -> Unit,
+    onInfoClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val (weekStartMs, weekEndMs, dateRangeText) = remember(weekOffset) {
-        StatisticsData.getWeekRange(weekOffset)
-    }
-    var appList by remember { mutableStateOf<List<StatisticsData.StatsAppItem>>(emptyList()) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) } // null = 전체
-
-    LaunchedEffect(tabEnum, weekOffset) {
-        withContext(Dispatchers.IO) {
-            if (tabEnum == StatisticsData.Tab.WEEKLY) {
-                appList = StatisticsData.loadAppUsage(context, weekStartMs, weekEndMs)
-            } else {
-                val (startMs, endMs) = StatisticsData.getTimeRange(context, tabEnum)
-                appList = StatisticsData.loadAppUsage(context, startMs, endMs)
-            }
+    val nav = remember(tabEnum, weekOffset, yearOffset) {
+        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+        when (tabEnum) {
+            StatisticsData.Tab.WEEKLY -> NavState(label, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) })
+            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
+            else -> NavState("", false, false, {}, {})
         }
     }
+    // TODO: 실제 데이터 연동 시 LaunchedEffect로 loadAppUsage 사용
+    val appList = remember { CategoryStatsDummyApps }
+    var selectedCategory by remember { mutableStateOf<String?>(null) } // null = 전체
 
     // 앱 사용량 기반 카테고리 비율 (많이 쓴 순 지그재그)
     val segments = remember(appList) {
@@ -747,16 +979,18 @@ private fun StatsStackedBarAndAppList(
             .shadow(6.dp, RoundedCornerShape(12.dp), false, Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.06f))
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
-            .padding(StatsCardPadding),
-        verticalArrangement = Arrangement.spacedBy(StatsCardContentSpacing),
+            .padding(horizontal = 16.dp, vertical = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         StatsCardTitleRow(
             title = "카테고리 통계",
-            dateRangeText = dateRangeText,
-            canGoPrev = true,
-            canGoNext = weekOffset < 0,
-            onPrevClick = { onWeekChange(weekOffset - 1) },
-            onNextClick = { if (weekOffset < 0) onWeekChange(weekOffset + 1) },
+            dateRangeText = nav.text,
+            canGoPrev = nav.canPrev,
+            canGoNext = nav.canNext,
+            onPrevClick = nav.onPrev,
+            onNextClick = nav.onNext,
+            titleIconSpacing = 4.dp,
+            onInfoClick = onInfoClick,
         )
 
         Box(
@@ -777,7 +1011,7 @@ private fun StatsStackedBarAndAppList(
                             .fillMaxHeight()
                             .weight((pct / 100f).coerceAtLeast(0.02f))
                             .background(CategoryColors[label] ?: Color.Gray)
-                            .clickable { selectedCategory = if (selectedCategory == label) null else label },
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selectedCategory = if (selectedCategory == label) null else label },
                     )
                 }
             }
@@ -787,16 +1021,18 @@ private fun StatsStackedBarAndAppList(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            segments.chunked(3).forEach { chunk ->
+            segments.chunked(3).forEachIndexed { columnIndex, chunk ->
+                val isLeft = columnIndex == 0
                 Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.width(148.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     chunk.forEach { (label, pct) ->
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedCategory = if (selectedCategory == label) null else label },
+                                .width(148.dp)
+                                .padding(start = if (isLeft) 8.dp else 22.dp, end = if (isLeft) 22.dp else 8.dp)
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { selectedCategory = if (selectedCategory == label) null else label },
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -827,11 +1063,20 @@ private fun StatsStackedBarAndAppList(
             }
         }
 
-        HorizontalDivider(
-            modifier = Modifier.fillMaxWidth(),
-            color = AppColors.BorderInfoBox,
-            thickness = 1.dp,
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+        ) {
+            Canvas(modifier = Modifier.fillMaxWidth().height(1.dp)) {
+                drawLine(
+                    color = AppColors.Grey400,
+                    start = Offset(0f, size.height / 2),
+                    end = Offset(size.width, size.height / 2),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f),
+                )
+            }
+        }
 
         if (selectedCategory != null) {
             Text(
@@ -848,6 +1093,7 @@ private fun StatsStackedBarAndAppList(
                     usageMinutes = app.usageMinutes,
                     categoryTag = app.categoryTag,
                     showDangerLabel = app.isRestricted,
+                    showWarningLabel = app.isWarning,
                 )
             }
         }
@@ -862,6 +1108,7 @@ private fun StatsAppRow(
     usageMinutes: String,
     categoryTag: String?,
     showDangerLabel: Boolean,
+    showWarningLabel: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val appIcon = rememberAppIconPainter(packageName)
@@ -875,17 +1122,13 @@ private fun StatsAppRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                painter = appIcon,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)),
-                tint = Color.Unspecified,
+            AppIconBox(
+                appIcon = appIcon,
+                size = 56.dp,
             )
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -896,6 +1139,9 @@ private fun StatsAppRow(
                     }
                     if (showDangerLabel) {
                         LabelDanger()
+                    }
+                    if (showWarningLabel) {
+                        LabelWarning()
                     }
                 }
                 Text(
@@ -934,33 +1180,53 @@ private fun StatsCategoryTag(tag: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** Figma 925:7519/925:7436 — 제한 앱 분석 디자인용 더미 데이터 */
+private val RestrictionDummyTimeSpecified = listOf(
+    com.cole.app.model.AppRestriction("com.instagram.android", "Instagram", 60, System.currentTimeMillis()),
+    com.cole.app.model.AppRestriction("com.netflix.mediaclient", "넷플릭스", 60, System.currentTimeMillis()),
+)
+private val RestrictionDummyDailyLimit = listOf(
+    com.cole.app.model.AppRestriction("com.instagram.android", "Instagram", 120, 0L),
+    com.cole.app.model.AppRestriction("com.netflix.mediaclient", "넷플릭스", 120, 0L),
+    com.cole.app.model.AppRestriction("com.google.android.youtube", "유튜브", 120, 0L),
+)
+private val RestrictionDummyMinutesTimeSpecified = mapOf(
+    "com.instagram.android" to 630L,
+    "com.netflix.mediaclient" to 630L,
+)
+private val RestrictionDummyMinutesDailyLimit = mapOf(
+    "com.instagram.android" to 150L,
+    "com.netflix.mediaclient" to 150L,
+    "com.google.android.youtube" to 150L,
+)
+
 /** 제한 앱 분석 카드 */
 @Composable
 private fun StatsRestrictionSection(
+    tabEnum: StatisticsData.Tab,
     weekOffset: Int,
     onWeekChange: (Int) -> Unit,
+    yearOffset: Int,
+    onYearChange: (Int) -> Unit,
     filterIndex: Int,
     onFilterChange: (Int) -> Unit,
     timeSpecifiedApps: List<com.cole.app.model.AppRestriction>,
     dailyLimitApps: List<com.cole.app.model.AppRestriction>,
+    onInfoClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val (weekStartMs, weekEndMs, dateRangeText) = remember(weekOffset) {
-        StatisticsData.getWeekRange(weekOffset)
-    }
-    var restrictedByPkg by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
-
-    LaunchedEffect(weekOffset, filterIndex, timeSpecifiedApps, dailyLimitApps) {
-        withContext(Dispatchers.IO) {
-            val apps = if (filterIndex == 0) timeSpecifiedApps else dailyLimitApps
-            restrictedByPkg = StatisticsData.loadRestrictedMinutesPerApp(
-                context, weekStartMs, weekEndMs, apps, isTimeSpecified = filterIndex == 0,
-            )
+    val nav = remember(tabEnum, weekOffset, yearOffset) {
+        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+        when (tabEnum) {
+            StatisticsData.Tab.WEEKLY -> NavState(label, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) })
+            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
+            else -> NavState("", false, false, {}, {})
         }
     }
+    // TODO: 실제 데이터 연동 시 LaunchedEffect로 loadRestrictedMinutesPerApp 사용
+    val displayApps = if (filterIndex == 0) RestrictionDummyTimeSpecified else RestrictionDummyDailyLimit
+    val restrictedByPkg = if (filterIndex == 0) RestrictionDummyMinutesTimeSpecified else RestrictionDummyMinutesDailyLimit
 
-    val displayApps = if (filterIndex == 0) timeSpecifiedApps else dailyLimitApps
     val sortedByRestricted = displayApps
         .map { it to (restrictedByPkg[it.packageName] ?: 0L) }
         .sortedByDescending { it.second }
@@ -970,8 +1236,8 @@ private fun StatsRestrictionSection(
     val topMinutes = topApp?.let { restrictedByPkg[it.packageName] ?: 0L } ?: 0L
 
     val infoMessage = when {
-        displayApps.isEmpty() -> "제한 앱은 설정에서 수정할 수 있어요"
-        topMinutes > 0 -> "지난주엔 ${topApp?.appName ?: "앱"}을 무려 ${java.text.DecimalFormat("#,###").format(topMinutes)}분이나 사용하지 않으셨네요! 정말 대단하세요."
+        filterIndex == 0 && topMinutes > 0 -> "지난주엔 ${topApp?.appName ?: "앱"} 을 무려 ${java.text.DecimalFormat("#,###").format(topMinutes)}분이나 사용하지 않으셨네요! 정말 대단하세요."
+        filterIndex == 1 && topMinutes > 0 -> "지난주엔 유튜브를 150분만 사용하셨어요. 굉장한 절제력이에요!"
         else -> "제한 앱은 설정에서 수정할 수 있어요"
     }
 
@@ -981,37 +1247,40 @@ private fun StatsRestrictionSection(
             .shadow(6.dp, RoundedCornerShape(12.dp), false, Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.06f))
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
-            .padding(StatsCardPadding),
-        verticalArrangement = Arrangement.spacedBy(StatsCardContentSpacing),
+            .padding(top = 26.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         StatsCardTitleRow(
             title = "제한 앱 분석",
-            dateRangeText = dateRangeText,
-            canGoPrev = true,
-            canGoNext = weekOffset < 0,
-            onPrevClick = { onWeekChange(weekOffset - 1) },
-            onNextClick = { if (weekOffset < 0) onWeekChange(weekOffset + 1) },
+            titleIconSpacing = 4.dp,
+            dateRangeText = nav.text,
+            canGoPrev = nav.canPrev,
+            canGoNext = nav.canNext,
+            onPrevClick = nav.onPrev,
+            onNextClick = nav.onNext,
+            onInfoClick = onInfoClick,
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.Start),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             listOf("시간 지정 제한", "일일 사용량 제한").forEachIndexed { index, label ->
                 val selected = filterIndex == index
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .height(30.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .background(if (selected) AppColors.Primary50 else Color.Transparent)
-                        .clickable { onFilterChange(index) }
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onFilterChange(index) }
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = label,
                         style = if (selected) AppTypography.Caption2.copy(color = AppColors.TextHighlight)
-                        else AppTypography.Caption1.copy(color = AppColors.TextDisabled),
+                        else AppTypography.Caption1.copy(color = AppColors.Grey500),
                     )
                 }
             }
@@ -1030,7 +1299,7 @@ private fun StatsRestrictionSection(
                     val restrictedMinutes = restrictedByPkg[app.packageName] ?: 0L
                     val displayText = "${java.text.DecimalFormat("#,###").format(restrictedMinutes)}분"
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1039,13 +1308,9 @@ private fun StatsRestrictionSection(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                painter = appIcon,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                tint = Color.Unspecified,
+                            AppIconBox(
+                                appIcon = appIcon,
+                                size = 56.dp,
                             )
                             Text(
                                 text = app.appName,
@@ -1054,7 +1319,7 @@ private fun StatsRestrictionSection(
                         }
                         Text(
                             text = displayText,
-                            style = AppTypography.BodyBold.copy(color = AppColors.Red300),
+                            style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
                         )
                     }
                 }
@@ -1065,29 +1330,72 @@ private fun StatsRestrictionSection(
     }
 }
 
+private val ComparisonMonthLabels = listOf("1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월")
+
 /** 사용시간 비교 카드 */
 @Composable
 private fun StatsGroupedBarSection(
+    tabEnum: StatisticsData.Tab,
     weekOffset: Int,
     onWeekChange: (Int) -> Unit,
+    yearOffset: Int,
+    onYearChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val (_, _, dateRangeText) = remember(weekOffset) {
-        StatisticsData.getWeekRange(weekOffset)
+    val barState = remember(tabEnum, weekOffset, yearOffset) {
+        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+        when (tabEnum) {
+            StatisticsData.Tab.WEEKLY -> ComparisonBarState(
+                label,
+                7,
+                DayLabels,
+                NavState(label, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) }),
+            )
+            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> {
+                val yr = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + yearOffset
+                val count = if (tabEnum == StatisticsData.Tab.MONTHLY) 12 else 6
+                val lbl = if (tabEnum == StatisticsData.Tab.MONTHLY) ComparisonMonthLabels else (yr - 5..yr).map { "$it" }
+                ComparisonBarState(label, count, lbl, NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) }))
+            }
+            else -> ComparisonBarState("", 7, DayLabels, NavState("", false, false, {}, {}))
+        }
     }
-    var comparisonData by remember { mutableStateOf<Pair<List<Long>, List<Long>>>(Pair(List(7) { 0L }, List(7) { 0L })) }
+    var comparisonData by remember { mutableStateOf<Pair<List<Long>, List<Long>>>(Pair(List(barState.barCount) { 0L }, List(barState.barCount) { 0L })) }
 
-    LaunchedEffect(weekOffset) {
+    LaunchedEffect(tabEnum, weekOffset, yearOffset) {
         withContext(Dispatchers.IO) {
-            comparisonData = StatisticsData.loadWeekComparisonMinutes(context, weekOffset)
+            comparisonData = when (tabEnum) {
+                StatisticsData.Tab.WEEKLY -> StatisticsData.loadWeekComparisonMinutes(context, weekOffset)
+                StatisticsData.Tab.MONTHLY -> StatisticsData.loadMonthComparisonMinutes(context, yearOffset)
+                StatisticsData.Tab.YEARLY -> StatisticsData.loadYearComparisonMinutes(context, yearOffset)
+                else -> Pair(List(7) { 0L }, List(7) { 0L })
+            }
         }
     }
 
     val (thisWeek, prevWeek) = comparisonData
-    val maxVal = (thisWeek + prevWeek).maxOrNull()?.takeIf { it > 0 } ?: 1L
-    val thisNorm = thisWeek.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
-    val prevNorm = prevWeek.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
+    val (displayThis, displayPrev, displayLabels) = when (tabEnum) {
+        StatisticsData.Tab.YEARLY -> {
+            val indicesWithData = thisWeek.indices.filter { i ->
+                thisWeek.getOrElse(i) { 0L } > 0L || prevWeek.getOrElse(i) { 0L } > 0L
+            }
+            if (indicesWithData.isEmpty()) {
+                Triple(thisWeek, prevWeek, barState.labels)
+            } else {
+                Triple(
+                    indicesWithData.map { thisWeek[it] },
+                    indicesWithData.map { prevWeek[it] },
+                    indicesWithData.map { barState.labels[it] },
+                )
+            }
+        }
+        else -> Triple(thisWeek, prevWeek, barState.labels)
+    }
+    val displayCount = displayLabels.size
+    val maxVal = (displayThis + displayPrev).maxOrNull()?.takeIf { it > 0 } ?: 1L
+    val thisNorm = displayThis.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
+    val prevNorm = displayPrev.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
 
     Column(
         modifier = modifier
@@ -1095,16 +1403,18 @@ private fun StatsGroupedBarSection(
             .shadow(6.dp, RoundedCornerShape(12.dp), false, Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.06f))
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
-            .padding(StatsCardPadding),
-        verticalArrangement = Arrangement.spacedBy(StatsCardContentSpacing),
+            .padding(horizontal = 16.dp, vertical = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         StatsCardTitleRow(
             title = "사용시간 비교",
-            dateRangeText = dateRangeText,
-            canGoPrev = true,
-            canGoNext = weekOffset < 0,
-            onPrevClick = { onWeekChange(weekOffset - 1) },
-            onNextClick = { if (weekOffset < 0) onWeekChange(weekOffset + 1) },
+            titleIconSpacing = 4.dp,
+            dateRangeText = barState.label,
+            canGoPrev = barState.nav.canPrev,
+            canGoNext = barState.nav.canNext,
+            onPrevClick = barState.nav.onPrev,
+            onNextClick = barState.nav.onNext,
+            showPeriodSelector = tabEnum != StatisticsData.Tab.YEARLY,
         )
 
         Column(
@@ -1114,8 +1424,9 @@ private fun StatsGroupedBarSection(
             Box(modifier = Modifier.fillMaxWidth().height(BarChartHeight)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                    for (i in 0..6) {
-                        val y = size.height * (i / 6f)
+                    val gridLines = (displayCount - 1).coerceAtLeast(1)
+                    for (i in 0..gridLines) {
+                        val y = size.height * (i.toFloat() / gridLines)
                         drawLine(
                             color = AppColors.ChartGuideline,
                             start = Offset(0f, y),
@@ -1123,6 +1434,11 @@ private fun StatsGroupedBarSection(
                             pathEffect = pathEffect,
                         )
                     }
+                }
+                val (barWidth, barGap, useFlexBar) = when {
+                    tabEnum == StatisticsData.Tab.MONTHLY -> Triple(4.dp, 4.dp, false)
+                    tabEnum == StatisticsData.Tab.YEARLY -> Triple(16.dp, 4.dp, displayCount <= 4)
+                    else -> Triple(11.dp, 4.dp, false)
                 }
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -1137,19 +1453,17 @@ private fun StatsGroupedBarSection(
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxHeight(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(barGap),
                                 verticalAlignment = Alignment.Bottom,
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .width(11.dp)
+                                    modifier = (if (useFlexBar) Modifier.weight(1f) else Modifier.width(barWidth))
                                         .fillMaxHeight(v2)
                                         .clip(RoundedCornerShape(BarCornerRadius))
                                         .background(AppColors.Grey350),
                                 )
                                 Box(
-                                    modifier = Modifier
-                                        .width(11.dp)
+                                    modifier = (if (useFlexBar) Modifier.weight(1f) else Modifier.width(barWidth))
                                         .fillMaxHeight(v1)
                                         .clip(RoundedCornerShape(BarCornerRadius))
                                         .background(AppColors.ChartTrackFill),
@@ -1161,7 +1475,7 @@ private fun StatsGroupedBarSection(
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                DayLabels.forEach { label ->
+                displayLabels.forEach { label ->
                     Text(
                         text = label,
                         style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
@@ -1170,10 +1484,82 @@ private fun StatsGroupedBarSection(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
+            val legendPrevLabel = when (tabEnum) {
+                StatisticsData.Tab.WEEKLY -> formatPeriodLabel(tabEnum, weekOffset - 1, yearOffset)
+                else -> formatPeriodLabel(tabEnum, weekOffset, yearOffset - 1)
+            }
+            val legendThisLabel = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.Grey350),
+                    )
+                    Text(
+                        text = legendPrevLabel,
+                        style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(AppColors.ChartTrackFill),
+                    )
+                    Text(
+                        text = legendThisLabel,
+                        style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
+                    )
+                }
+            }
+        }
+
+        val compThisLabel = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+        val compPrevLabel = when (tabEnum) {
+            StatisticsData.Tab.WEEKLY -> formatPeriodLabel(tabEnum, weekOffset - 1, yearOffset)
+            else -> formatPeriodLabel(tabEnum, weekOffset, yearOffset - 1)
+        }
+        val thisTotal = thisWeek.sum()
+        val prevTotal = prevWeek.sum()
+        val fmt = java.text.DecimalFormat("#,###")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(83.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(AppColors.Grey100)
+                .border(0.5.dp, AppColors.BorderInfoBox, RoundedCornerShape(6.dp))
+                .padding(horizontal = 0.dp, vertical = StatsCardContentSpacing),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatsInsightStatItem(label = compThisLabel, value = "${fmt.format(thisTotal)}분")
+            IcoStatsBriefDivider()
+            StatsInsightStatItem(label = compPrevLabel, value = "${fmt.format(prevTotal)}분")
         }
 
         ColeInfoBoxCompact(
-            text = "지난주에 비해 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요",
+            text = when (tabEnum) {
+                StatisticsData.Tab.WEEKLY -> "${compPrevLabel}에 비해 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
+                StatisticsData.Tab.MONTHLY -> "${compPrevLabel}에 비해 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
+                StatisticsData.Tab.YEARLY -> "${compPrevLabel}에 비해 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
+                else -> "사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
+            },
         )
     }
 }

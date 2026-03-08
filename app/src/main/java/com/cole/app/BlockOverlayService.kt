@@ -7,9 +7,11 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -41,16 +43,27 @@ class BlockOverlayService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
         }
 
-        val layout = LinearLayout(this).apply {
+        val layout = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(230, 0, 0, 0))
+            isFocusableInTouchMode = true
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.argb(230, 0, 0, 0))
         }
 
         val textView = TextView(this).apply {
@@ -81,10 +94,12 @@ class BlockOverlayService : Service() {
             setOnClickListener { dismiss() }
         }
 
-        layout.addView(textView)
-        layout.addView(pauseButton)
-        layout.addView(closeButton)
+        content.addView(textView)
+        content.addView(pauseButton)
+        content.addView(closeButton)
 
+        layout.addView(content)
+        layout.requestFocus()
         overlayView = layout
         windowManager?.addView(layout, layoutParams)
     }

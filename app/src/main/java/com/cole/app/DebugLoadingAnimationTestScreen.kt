@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +75,7 @@ fun DebugLoadingAnimationTestScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .size(200.dp)
                 .padding(24.dp)
-                .clickable { replayKey++ },
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { replayKey++ },
             contentAlignment = androidx.compose.ui.Alignment.Center,
         ) {
             LoadingToCheckAnimationContent(

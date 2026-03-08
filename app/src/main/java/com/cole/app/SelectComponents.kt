@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +53,7 @@ fun ColeChip(
                 if (selected) Modifier.background(AppColors.Primary300)
                 else Modifier.background(AppColors.White900).border(1.5.dp, AppColors.BorderDefault, RoundedCornerShape(6.dp))
             )
-            .clickable { onClick() },
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Text(text = label, style = AppTypography.Caption1.copy(color = if (selected) AppColors.TextInvert else AppColors.TextBody, textAlign = TextAlign.Center))
@@ -152,7 +154,7 @@ fun ColeRadioButton(selected: Boolean, onClick: () -> Unit, modifier: Modifier =
     Box(
         modifier = modifier
             .size(RadioButtonTouchSize)
-            .then(if (enabled) Modifier.clickable { onClick() } else Modifier),
+            .then(if (enabled) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -190,7 +192,7 @@ fun ColeSelectionCard(
                 else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
             )
             .background(Color.Transparent)
-            .clickable { onClick() }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
             .padding(horizontal = 16.dp, vertical = 28.dp),
     ) {
         Row(
@@ -251,7 +253,7 @@ fun ColeSelectionCardTitleOnly(
                 else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
             )
             .background(Color.Transparent)
-            .clickable { onClick() }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
             .padding(horizontal = 16.dp, vertical = 22.dp),
     ) {
         Row(
@@ -323,7 +325,7 @@ fun ColeSelfTestButton(
                 if (selected) AppColors.ButtonPrimaryBgDefault
                 else AppColors.ButtonSecondaryBgDefault
             )
-            .clickable { onClick() }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
             .padding(horizontal = 24.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -373,6 +375,6 @@ fun ColeCheckBox(
         tint = androidx.compose.ui.graphics.Color.Unspecified,
         modifier = modifier
             .size(size)
-            .clickable { onCheckedChange(!checked) },
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCheckedChange(!checked) },
     )
 }

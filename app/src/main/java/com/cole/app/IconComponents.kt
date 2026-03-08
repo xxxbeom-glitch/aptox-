@@ -335,6 +335,32 @@ fun RestrictedAppIconBox(
     }
 }
 
+/**
+ * 앱 아이콘 — 기기 AdaptiveIcon 마스크(스쿼클) + border
+ * 통계 등 자물쇠 없이 아이콘만 표시할 때 사용. 홈 화면과 동일한 쉐이프
+ */
+@Composable
+fun AppIconBox(
+    appIcon: Painter,
+    modifier: Modifier = Modifier,
+    size: Dp = 56.dp,
+) {
+    val maskShape = rememberDeviceIconMaskShape()
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(maskShape)
+            .border(AppIconBorderWidth, AppIconBorderColor, maskShape),
+    ) {
+        Icon(
+            painter = appIcon,
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
 @Composable
 fun IcoAppLockOff(
     modifier: Modifier = Modifier,

@@ -275,7 +275,7 @@ fun PasswordResetCodeScreen(
                 Text(
                     if (isResendLoading) "발송 중..." else "재발송",
                     style = AppTypography.BodyBold.copy(color = AppColors.TextHighlight),
-                    modifier = Modifier.clickable(enabled = !isResendLoading) { onResendClick() },
+                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !isResendLoading) { onResendClick() },
                 )
             }
         }

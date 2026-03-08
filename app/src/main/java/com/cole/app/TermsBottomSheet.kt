@@ -2,6 +2,7 @@ package com.cole.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,7 @@ fun TermsBottomSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(AppColors.Grey200, RoundedCornerShape(6.dp))
-                    .clickable { onAllAgreedChange(!allAgreedState) }
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onAllAgreedChange(!allAgreedState) }
                     .padding(horizontal = 12.dp, vertical = 16.dp),
             ) {
                 Row(
@@ -77,7 +79,7 @@ fun TermsBottomSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onItemCheckedChange(index, !item.checked) }
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onItemCheckedChange(index, !item.checked) }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically,

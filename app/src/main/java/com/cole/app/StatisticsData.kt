@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Process
+import com.cole.app.usage.UsageStatsLocalRepository
+import kotlin.random.Random
 import java.text.DecimalFormat
 import java.util.Calendar
 
@@ -34,6 +36,20 @@ import java.util.Calendar
  */
 object StatisticsData {
 
+    /** true: 2024-01-01~현재 랜덤 더미 데이터로 주간/월간/연간 전체 채움 (개발용) */
+    private const val USE_DUMMY_FULL = true
+
+    private const val DUMMY_START_DATE = "20240101"
+
+    /** 날짜별 더미 분단위 사용량. 2024-01-01~오늘 범위 내에서만 유효 */
+    private fun dummyMinutesForDate(dateStr: String): Long {
+        if (dateStr < DUMMY_START_DATE) return 0L
+        val today = UsageStatsLocalRepository.msToYyyyMmDd(System.currentTimeMillis())
+        if (dateStr > today) return 0L
+        val seed = dateStr.hashCode().toLong().and(0xFFFF_FFFFL)
+        return 80 + (Random(seed).nextLong(0, 350))
+    }
+
     /** 탭 인덱스: 0=오늘, 1=주간, 2=월간, 3=연간 */
     enum class Tab { TODAY, WEEKLY, MONTHLY, YEARLY }
 
@@ -50,6 +66,8 @@ object StatisticsData {
         val categoryTag: String? = null,
         /** 카테고리 비율 계산용 (분) */
         val usageMs: Long = 0L,
+        /** 주의 배지 표시 (디자인용) */
+        val isWarning: Boolean = false,
     )
 
     /** 주간 탭용: weekOffset 0=이번 주, -1=저번 주, 1=다음 주 */
@@ -72,15 +90,78 @@ object StatisticsData {
         return Triple(startMs, endMs, displayText)
     }
 
-    /** 요일별(월~일) 사용량 분. startMs~endMs 기간 내 UsageEvents 기반 */
+    /** 요일별(월~일) 사용량 분. DB 우선, 오늘은 queryEvents 사용 */
     fun loadDayOfWeekMinutes(context: Context, startMs: Long, endMs: Long): List<Long> {
+        if (USE_DUMMY_FULL) {
+            val dayMinutes = LongArray(7)
+            val cal = Calendar.getInstance()
+            var t = startMs
+            while (t <= endMs) {
+                cal.timeInMillis = t
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(cal.timeInMillis)
+                val dow = cal.get(Calendar.DAY_OF_WEEK)
+                val idx = (dow + 5) % 7
+                dayMinutes[idx] += dummyMinutesForDate(dateStr)
+                cal.add(Calendar.DAY_OF_YEAR, 1)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                t = cal.timeInMillis
+            }
+            return dayMinutes.toList()
+        }
         if (!hasUsageAccess(context)) return List(7) { 0L }
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(7) { 0L }
-        val events = usm.queryEvents(startMs, endMs) ?: return List(7) { 0L }
+        val repo = UsageStatsLocalRepository(context)
+        val todayStr = UsageStatsLocalRepository.msToYyyyMmDd(System.currentTimeMillis())
         val dayMinutes = LongArray(7)
+        val cal = Calendar.getInstance()
+
+        var t = startMs
+        while (t <= endMs) {
+            cal.timeInMillis = t
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val dayStart = cal.timeInMillis
+            val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(dayStart)
+            val dow = cal.get(Calendar.DAY_OF_WEEK)
+            val idx = (dow + 5) % 7
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            val dayEnd = cal.timeInMillis
+
+            val mins = if (dateStr == todayStr) {
+                aggregateOneDayFromEvents(context, dayStart, minOf(dayEnd, System.currentTimeMillis())) / 60_000
+            } else {
+                repo.getDayTotalsForDatesBlocking(listOf(dateStr))[dateStr] ?: 0L
+            }
+            dayMinutes[idx] += mins
+            cal.timeInMillis = t
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            t = cal.timeInMillis
+        }
+        return dayMinutes.toList()
+    }
+
+    /** 하루 구간의 총 사용량(ms). queryEvents 기반 */
+    private fun aggregateOneDayFromEvents(context: Context, startMs: Long, endMs: Long): Long {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0L
+        val events = usm.queryEvents(startMs, endMs) ?: return 0L
+        var total = 0L
         val sessionStarts = mutableMapOf<String, Long>()
         val event = UsageEvents.Event()
-        val cal = Calendar.getInstance()
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             when (event.eventType) {
@@ -89,15 +170,44 @@ object StatisticsData {
                 UsageEvents.Event.MOVE_TO_BACKGROUND -> {
                     val key = event.packageName + ":" + event.className
                     val start = sessionStarts.remove(key) ?: continue
-                    val durationMs = (event.timeStamp - start).coerceAtLeast(0)
-                    cal.timeInMillis = start
-                    val dow = cal.get(Calendar.DAY_OF_WEEK) // 일=1, 월=2, ..., 토=7
-                    val idx = (dow + 5) % 7 // 월=0, ..., 일=6
-                    dayMinutes[idx] += durationMs / 60_000
+                    total += (event.timeStamp - start).coerceAtLeast(0)
                 }
+                else -> {}
             }
         }
-        return dayMinutes.toList()
+        return total
+    }
+
+    /** 구간 내 앱별 (usageMs, sessionCount). userAppPackages 필터 적용 */
+    private fun aggregateAppUsageFromEvents(
+        context: Context,
+        startMs: Long,
+        endMs: Long,
+        userAppPackages: Set<String>,
+    ): Map<String, Pair<Long, Int>> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return emptyMap()
+        val events = usm.queryEvents(startMs, endMs) ?: return emptyMap()
+        val usageMs = mutableMapOf<String, Long>()
+        val sessionCounts = mutableMapOf<String, Int>()
+        val sessionStarts = mutableMapOf<String, Long>()
+        val event = UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.packageName !in userAppPackages) continue
+            when (event.eventType) {
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                    sessionStarts[event.packageName] = event.timeStamp
+                    sessionCounts[event.packageName] = (sessionCounts[event.packageName] ?: 0) + 1
+                }
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                    val start = sessionStarts.remove(event.packageName) ?: continue
+                    val duration = (event.timeStamp - start).coerceAtLeast(0)
+                    usageMs[event.packageName] = (usageMs[event.packageName] ?: 0) + duration
+                }
+                else -> {}
+            }
+        }
+        return usageMs.mapValues { Pair(it.value, sessionCounts[it.key] ?: 0) }
     }
 
     /** 월간: yearOffset 0=올해, -1=작년. 해당 연도의 (startMs, endMs, "YYYY") */
@@ -177,54 +287,93 @@ object StatisticsData {
         return Pair(ranges, labels)
     }
 
-    /** 월별(1~12월) 사용량 분. startMs~endMs는 해당 연도 1.1~12.31 */
+    /** 월별(1~12월) 사용량 분. DB 우선, 현재 연도면 오늘분을 queryEvents로 추가 */
     fun loadMonthMinutes(context: Context, startMs: Long, endMs: Long): List<Long> {
-        if (!hasUsageAccess(context)) return List(12) { 0L }
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(12) { 0L }
-        val events = usm.queryEvents(startMs, endMs) ?: return List(12) { 0L }
-        val monthMinutes = LongArray(12)
-        val sessionStarts = mutableMapOf<String, Long>()
-        val event = UsageEvents.Event()
-        val cal = Calendar.getInstance()
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND ->
-                    sessionStarts[event.packageName + ":" + event.className] = event.timeStamp
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                    val key = event.packageName + ":" + event.className
-                    val start = sessionStarts.remove(key) ?: continue
-                    val durationMs = (event.timeStamp - start).coerceAtLeast(0)
-                    cal.timeInMillis = start
-                    val month = cal.get(Calendar.MONTH)
-                    monthMinutes[month] += durationMs / 60_000
+        if (USE_DUMMY_FULL) {
+            val cal = Calendar.getInstance().apply { timeInMillis = startMs }
+            val year = cal.get(Calendar.YEAR)
+            val monthTotals = LongArray(12)
+            for (month in 0..11) {
+                cal.set(Calendar.YEAR, year)
+                cal.set(Calendar.MONTH, month)
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                var t = cal.timeInMillis
+                cal.add(Calendar.MONTH, 1)
+                val monthEndMs = cal.timeInMillis
+                while (t < monthEndMs) {
+                    val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(t)
+                    monthTotals[month] += dummyMinutesForDate(dateStr)
+                    cal.timeInMillis = t
+                    cal.add(Calendar.DAY_OF_YEAR, 1)
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+                    t = cal.timeInMillis
                 }
             }
+            return monthTotals.toList()
         }
-        return monthMinutes.toList()
+        if (!hasUsageAccess(context)) return List(12) { 0L }
+        val repo = UsageStatsLocalRepository(context)
+        val cal = Calendar.getInstance().apply { timeInMillis = startMs }
+        val year = cal.get(Calendar.YEAR)
+        val monthMinutes = repo.getMonthTotalsForYearBlocking(year).toMutableList()
+        val now = Calendar.getInstance()
+        if (year == now.get(Calendar.YEAR)) {
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val todayMs = aggregateOneDayFromEvents(context, todayStart, System.currentTimeMillis())
+            val currentMonth = now.get(Calendar.MONTH)
+            monthMinutes[currentMonth] = monthMinutes[currentMonth] + todayMs / 60_000
+        }
+        return monthMinutes
     }
 
-    /** 연도별 사용량 분. yearRanges: [(startMs, endMs)] 순. 최대 6개, 적으면 좌측정렬용 */
+    /** 연도별 사용량 분. DB 우선, 범위에 오늘 포함 시 queryEvents로 추가 */
     fun loadYearsMinutes(context: Context, yearRanges: List<Pair<Long, Long>>): List<Long> {
-        if (!hasUsageAccess(context)) return yearRanges.map { 0L }
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return yearRanges.map { 0L }
-        return yearRanges.map { (startMs, endMs) ->
-            val events = usm.queryEvents(startMs, endMs) ?: return@map 0L
-            var total = 0L
-            val sessionStarts = mutableMapOf<String, Long>()
-            val event = UsageEvents.Event()
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                when (event.eventType) {
-                    UsageEvents.Event.MOVE_TO_FOREGROUND ->
-                        sessionStarts[event.packageName + ":" + event.className] = event.timeStamp
-                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                        val key = event.packageName + ":" + event.className
-                        val startTs = sessionStarts.remove(key) ?: continue
-                        total += (event.timeStamp - startTs).coerceAtLeast(0) / 60_000
-                    }
+        if (USE_DUMMY_FULL) {
+            return yearRanges.map { (startMs, endMs) ->
+                val cal = Calendar.getInstance()
+                var t = startMs
+                var total = 0L
+                while (t <= endMs) {
+                    cal.timeInMillis = t
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+                    val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(cal.timeInMillis)
+                    total += dummyMinutesForDate(dateStr)
+                    cal.add(Calendar.DAY_OF_YEAR, 1)
+                    t = cal.timeInMillis
                 }
+                total
+            }
+        }
+        if (!hasUsageAccess(context)) return yearRanges.map { 0L }
+        val repo = UsageStatsLocalRepository(context)
+        val todayStr = UsageStatsLocalRepository.msToYyyyMmDd(System.currentTimeMillis())
+        return yearRanges.map { (startMs, endMs) ->
+            val startDate = UsageStatsLocalRepository.msToYyyyMmDd(startMs)
+            val endDate = UsageStatsLocalRepository.msToYyyyMmDd(endMs)
+            var total = repo.getTotalForDateRangeBlocking(startDate, endDate)
+            if (endDate >= todayStr && startDate <= todayStr) {
+                val cal = Calendar.getInstance()
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val todayMs = aggregateOneDayFromEvents(context, cal.timeInMillis, System.currentTimeMillis())
+                total += todayMs / 60_000
             }
             total
         }
@@ -270,6 +419,78 @@ object StatisticsData {
         val thisWeek = loadDayOfWeekMinutes(context, thisStart, thisEnd)
         val prevWeek = loadDayOfWeekMinutes(context, prevStart, prevEnd)
         return Pair(thisWeek, prevWeek)
+    }
+
+    /** 월간: 해당 연도 12개월 vs 전년 12개월 (yearOffset 0=올해) */
+    fun loadMonthComparisonMinutes(context: Context, yearOffset: Int): Pair<List<Long>, List<Long>> {
+        if (USE_DUMMY_FULL) {
+            val (thisStart, thisEnd, _) = getMonthRange(yearOffset)
+            val (prevStart, prevEnd, _) = getMonthRange(yearOffset - 1)
+            return Pair(
+                loadMonthMinutes(context, thisStart, thisEnd),
+                loadMonthMinutes(context, prevStart, prevEnd),
+            )
+        }
+        val (thisStart, thisEnd, _) = getMonthRange(yearOffset)
+        val (prevStart, prevEnd, _) = getMonthRange(yearOffset - 1)
+        val thisYear = loadMonthMinutes(context, thisStart, thisEnd)
+        val prevYear = loadMonthMinutes(context, prevStart, prevEnd)
+        return Pair(thisYear, prevYear)
+    }
+
+    /** 연간: 선택 연도 포함 6년 각 연도 vs 직전 연도 (yearOffset 0=올해) */
+    fun loadYearComparisonMinutes(context: Context, yearOffset: Int): Pair<List<Long>, List<Long>> {
+        if (USE_DUMMY_FULL) {
+            val (thisRanges, _) = getYearRanges(yearOffset)
+            val (prevRanges, _) = getYearRanges(yearOffset - 1)
+            return Pair(
+                loadYearsMinutes(context, thisRanges),
+                loadYearsMinutes(context, prevRanges),
+            )
+        }
+        val cal = Calendar.getInstance()
+        val selectedYear = cal.get(Calendar.YEAR) + yearOffset
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val firstYear = (currentYear - 5).coerceAtLeast(2020)
+        val startYear = (selectedYear - 5).coerceAtLeast(firstYear)
+        val count = (selectedYear - startYear + 1).coerceIn(1, 6)
+        val thisRanges = (0 until count).map { i ->
+            val y = startYear + i
+            cal.set(Calendar.YEAR, y)
+            cal.set(Calendar.MONTH, Calendar.JANUARY)
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val startMs = cal.timeInMillis
+            cal.set(Calendar.MONTH, Calendar.DECEMBER)
+            cal.set(Calendar.DAY_OF_MONTH, 31)
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            Pair(startMs, cal.timeInMillis)
+        }
+        val prevRanges = (0 until count).map { i ->
+            val y = startYear + i - 1
+            cal.set(Calendar.YEAR, y)
+            cal.set(Calendar.MONTH, Calendar.JANUARY)
+            cal.set(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val startMs = cal.timeInMillis
+            cal.set(Calendar.MONTH, Calendar.DECEMBER)
+            cal.set(Calendar.DAY_OF_MONTH, 31)
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            Pair(startMs, cal.timeInMillis)
+        }
+        return Pair(loadYearsMinutes(context, thisRanges), loadYearsMinutes(context, prevRanges))
     }
 
     fun hasUsageAccess(context: Context): Boolean {
@@ -427,31 +648,27 @@ object StatisticsData {
 
     fun loadAppUsage(context: Context, startMs: Long, endMs: Long): List<StatsAppItem> {
         if (!hasUsageAccess(context)) return emptyList()
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return emptyList()
+        val repo = UsageStatsLocalRepository(context)
         val pm = context.packageManager
         val restrictedPkgs = AppRestrictionRepository(context).getAll().map { it.packageName }.toSet()
         val userAppPackages = getUserInstalledPackages(pm)
+        val startDate = UsageStatsLocalRepository.msToYyyyMmDd(startMs)
+        val endDate = UsageStatsLocalRepository.msToYyyyMmDd(endMs)
+        val todayStr = UsageStatsLocalRepository.msToYyyyMmDd(System.currentTimeMillis())
 
-        // INTERVAL_BEST 대신 UsageEvents로 직접 집계 → startMs/endMs 정확히 적용
-        val events = usm.queryEvents(startMs, endMs) ?: return emptyList()
-        val event = UsageEvents.Event()
-        val usageMs = mutableMapOf<String, Long>()
-        val sessionCounts = mutableMapOf<String, Int>()
-        val sessionStarts = mutableMapOf<String, Long>()
+        val usageMs = repo.getAppUsageForRangeBlocking(startDate, endDate).mapValues { it.value.first }.toMutableMap()
+        val sessionCounts = repo.getAppUsageForRangeBlocking(startDate, endDate).mapValues { it.value.second }.toMutableMap()
 
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            if (event.packageName !in userAppPackages) continue
-            when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                    sessionStarts[event.packageName] = event.timeStamp
-                    sessionCounts[event.packageName] = (sessionCounts[event.packageName] ?: 0) + 1
-                }
-                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                    val start = sessionStarts.remove(event.packageName) ?: continue
-                    val duration = (event.timeStamp - start).coerceAtLeast(0)
-                    usageMs[event.packageName] = (usageMs[event.packageName] ?: 0) + duration
-                }
+        if (endDate >= todayStr && startDate <= todayStr) {
+            val cal = Calendar.getInstance()
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val todayStart = cal.timeInMillis
+            aggregateAppUsageFromEvents(context, todayStart, System.currentTimeMillis(), userAppPackages).forEach { (pkg, pair) ->
+                usageMs[pkg] = (usageMs[pkg] ?: 0L) + pair.first
+                sessionCounts[pkg] = (sessionCounts[pkg] ?: 0) + pair.second
             }
         }
 

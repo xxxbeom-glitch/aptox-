@@ -2,6 +2,7 @@ package com.cole.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -530,7 +531,7 @@ fun SignUpVerificationCodeScreen(
                 Text(
                     if (isResendLoading) "발송 중..." else "재발송",
                     style = AppTypography.BodyBold.copy(color = AppColors.TextHighlight),
-                    modifier = Modifier.clickable(enabled = !isResendLoading) { onResendClick() },
+                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !isResendLoading) { onResendClick() },
                 )
             }
             if (errorMessage != null) {
