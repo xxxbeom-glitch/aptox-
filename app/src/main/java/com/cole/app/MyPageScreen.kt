@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,14 +28,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
  * 마이 페이지 화면 (Figma MY-01, node 628-3863)
  * - 내 계정: 계정 관리, 구독 관리
  * - 시스템: 알림, 권한 설정
- * - 정보: 정보, 오픈소스
- * - 계정 탈퇴
+ * - 하단: 버전 1.0
  */
 @Composable
 fun MyPageScreen(
@@ -42,79 +43,82 @@ fun MyPageScreen(
     onSubscriptionManageClick: () -> Unit = {},
     onNotificationClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
-    onAppInfoClick: () -> Unit = {},
-    onOpenSourceClick: () -> Unit = {},
-    onWithdrawClick: () -> Unit = {},
+    onBugReportClick: () -> Unit = {},
+    onTermsClick: () -> Unit = {},
+    onPrivacyClick: () -> Unit = {},
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(top = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        // 내 계정
-        MyPageSection(title = "내 계정") {
-            MyPageRowItem(
-                iconResId = R.drawable.ic_manageaccount,
-                label = "계정 관리",
-                onClick = onAccountManageClick,
-            )
-            MyPageDivider()
-            MyPageRowItem(
-                iconResId = R.drawable.ic_managesubs,
-                label = "구독 관리",
-                onClick = onSubscriptionManageClick,
-            )
-        }
-
-        // 시스템
-        MyPageSection(title = "시스템") {
-            MyPageRowItem(
-                iconResId = R.drawable.ic_notisetting,
-                label = "알림",
-                onClick = onNotificationClick,
-            )
-            MyPageDivider()
-            MyPageRowItem(
-                iconResId = R.drawable.ic_premission,
-                label = "권한 설정",
-                onClick = onPermissionClick,
-            )
-        }
-
-        // 정보
-        MyPageSection(title = "정보") {
-            MyPageRowItem(
-                iconResId = R.drawable.ic_appinfo,
-                label = "정보",
-                onClick = onAppInfoClick,
-            )
-            MyPageDivider()
-            MyPageRowItem(
-                iconResId = R.drawable.ic_opensource,
-                label = "오픈소스",
-                onClick = onOpenSourceClick,
-            )
-        }
-
-        // 계정 탈퇴 (단독 카드, 16dp radius per Figma)
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(AppColors.SurfaceBackgroundCard)
-                .padding(horizontal = 18.dp, vertical = 22.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 24.dp)
+                .padding(bottom = 52.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            MyPageRowItem(
-                iconResId = R.drawable.ic_delete,
-                label = "계정 탈퇴",
-                onClick = onWithdrawClick,
-            )
+            // 내 계정
+            MyPageSection(title = "내 계정") {
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_manageaccount,
+                    label = "계정 관리",
+                    onClick = onAccountManageClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_managesubs,
+                    label = "구독 관리",
+                    onClick = onSubscriptionManageClick,
+                )
+            }
+
+            // 시스템
+            MyPageSection(title = "시스템") {
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_notisetting,
+                    label = "알림",
+                    onClick = onNotificationClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_premission,
+                    label = "권한 설정",
+                    onClick = onPermissionClick,
+                )
+            }
+
+            // 정보
+            MyPageSection(title = "정보") {
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_terms,
+                    label = "이용약관",
+                    onClick = onTermsClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_privacy,
+                    label = "개인정보처리방침",
+                    onClick = onPrivacyClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_bug_report,
+                    label = "버그신고",
+                    onClick = onBugReportClick,
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        // 버전 (하단 고정, 마지막 메뉴와 16dp 간격)
+        Text(
+            text = "V1.0",
+            style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

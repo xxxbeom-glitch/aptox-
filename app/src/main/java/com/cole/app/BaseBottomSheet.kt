@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -52,6 +53,7 @@ fun BaseBottomSheet(
         modifier = modifier,
         containerColor = AppColors.SurfaceBackgroundBackground,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        scrimColor = Color.Black.copy(alpha = 0.6f),
     ) {
         Column(
             modifier = Modifier

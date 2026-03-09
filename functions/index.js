@@ -1,9 +1,12 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const https = require("https");
+const nodemailer = require("nodemailer");
 const { SolapiMessageService } = require("solapi");
 
 admin.initializeApp();
+
+const BUG_REPORT_EMAIL_TO = "psblove88@gmail.com";
 
 const VERIFICATION_CODES_COLLECTION = "verificationCodes";
 const CODE_EXPIRY_MINUTES = 5;
@@ -470,3 +473,52 @@ function getKakaoUserInfo(accessToken) {
     req.end();
   });
 }
+
+/**
+ * 버그 신고 제출 - Firestore 저장 + psblove88@gmail.com 으로 이메일 발송
+ * Gmail SMTP: firebase functions:config:set bugreport.email_user="psblove88@gmail.com" bugreport.email_pass="앱비밀번호"
+ */
+exports.submitBugReport = functions.https.onCall(async (data, context) => {
+  const content = data?.content;
+  if (!content || typeof content !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "내용을 입력해주세요.");
+  }
+
+  const trimmed = content.trim();
+  if (trimmed.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "내용을 입력해주세요.");
+  }
+
+  const db = admin.firestore();
+  const docRef = await db.collection("bugReports").add({
+    content: trimmed,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    userId: context.auth?.uid || null,
+  });
+
+  const config = functions.config().bugreport || {};
+  const emailUser = config.email_user || process.env.BUGREPORT_EMAIL_USER;
+  const emailPass = config.email_pass || process.env.BUGREPORT_EMAIL_PASS;
+
+  if (emailUser && emailPass) {
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: { user: emailUser, pass: emailPass },
+      });
+      await transporter.sendMail({
+        from: emailUser,
+        to: BUG_REPORT_EMAIL_TO,
+        subject: "[Cole] 버그 신고",
+        text: trimmed,
+        replyTo: context.auth?.token?.email || undefined,
+      });
+    } catch (e) {
+      console.error("submitBugReport 이메일 발송 실패:", e.message);
+    }
+  } else {
+    console.warn("버그 신고: 이메일 설정 없음. firebase functions:config:set bugreport.email_user=... bugreport.email_pass=...");
+  }
+
+  return { success: true, id: docRef.id };
+});

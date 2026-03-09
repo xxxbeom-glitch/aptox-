@@ -135,10 +135,11 @@ fun StatisticsScreen(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(top = 24.dp, bottom = 24.dp),
+            .padding(top = 24.dp, bottom = 24.dp)
+            .windowInsetsPadding(WindowInsets.navigationBars),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         ColeSegmentedTab(
@@ -187,6 +188,8 @@ fun StatisticsScreen(
             yearOffset = yearOffsetComparison,
             onYearChange = { yearOffsetComparison = it },
         )
+        // 맨 아래 스크롤 시 바텀바에 가려지지 않도록 여백 추가
+        Spacer(modifier = Modifier.height(100.dp))
     }
 
     showHelpSheet?.let { helpType ->
@@ -279,6 +282,11 @@ private fun StatsInsightCard(
     val content = BriefContentByTab[tabEnum] ?: BriefContentByTab[StatisticsData.Tab.WEEKLY]!!
     val (title, body, statPair) = content
     val (stat1Label, stat1Value) = statPair
+    val effectiveStat1Value = when {
+        tabEnum == StatisticsData.Tab.WEEKLY && DebugTestSettings.debugWeeklyChallengeDays != null ->
+            "${DebugTestSettings.debugWeeklyChallengeDays}일"
+        else -> stat1Value
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -308,7 +316,7 @@ private fun StatsInsightCard(
                 style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
             )
         }
-        StatsInsightStatBox(stat1Label = stat1Label, stat1Value = stat1Value)
+        StatsInsightStatBox(stat1Label = stat1Label, stat1Value = effectiveStat1Value)
     }
 }
 
@@ -645,7 +653,7 @@ private fun DayOfWeekBarChart(
     val padded = if (values.size >= 7) values.take(7) else values + List(7 - values.size) { 0L }
     val maxVal = padded.maxOrNull()?.takeIf { it > 0 } ?: 1L
     val normalized = padded.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
-    val highlightIdx = if (isCurrentPeriod) normalized.indices.maxByOrNull { normalized[it] } ?: 0 else -1
+    val highlightIdx = if (isCurrentPeriod) 6 else -1 // 우측(일) 막대만 컬러
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -1483,7 +1491,7 @@ private fun StatsGroupedBarSection(
                 }
                 Row(
                     modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(4.dp, Alignment.Start) else Arrangement.SpaceEvenly,
+                    horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(6.dp, Alignment.Start) else Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     selectedNorm.forEachIndexed { index, vSelected ->
@@ -1518,7 +1526,7 @@ private fun StatsGroupedBarSection(
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(4.dp, Alignment.Start) else Arrangement.SpaceEvenly,
+                horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(6.dp, Alignment.Start) else Arrangement.SpaceEvenly,
             ) {
                 displayLabels.forEach { label ->
                     Text(

@@ -51,7 +51,7 @@ fun ColeChip(
             .clip(RoundedCornerShape(6.dp))
             .then(
                 if (selected) Modifier.background(AppColors.Primary300)
-                else Modifier.background(AppColors.White900).border(1.5.dp, AppColors.BorderDefault, RoundedCornerShape(6.dp))
+                else Modifier.background(AppColors.White900).border(1.dp, AppColors.BorderDefault, RoundedCornerShape(6.dp))
             )
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() },
         contentAlignment = Alignment.Center,
@@ -163,7 +163,7 @@ fun ColeRadioButton(selected: Boolean, onClick: () -> Unit, modifier: Modifier =
                 .clip(CircleShape)
                 .then(
                     if (selected) Modifier.background(AppColors.InteractiveRadioBgSelected)
-                    else Modifier.background(AppColors.White900).border(1.5.dp, AppColors.InteractiveRadioBorderUnselected, CircleShape)
+                    else Modifier.background(Color.Transparent).border(1.5.dp, AppColors.InteractiveRadioBorderUnselected, CircleShape)
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -191,7 +191,7 @@ fun ColeSelectionCard(
                 if (selected) Modifier.border(1.5.dp, AppColors.Primary300, RoundedCornerShape(12.dp))
                 else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
             )
-            .background(Color.Transparent)
+            .background(Color(0xFFFFFFFF))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
             .padding(horizontal = 16.dp, vertical = 28.dp),
     ) {
@@ -252,7 +252,7 @@ fun ColeSelectionCardTitleOnly(
                 if (selected) Modifier.border(1.5.dp, AppColors.Primary300, RoundedCornerShape(12.dp))
                 else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
             )
-            .background(Color.Transparent)
+            .background(Color(0xFFFFFFFF))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
             .padding(horizontal = 16.dp, vertical = 22.dp),
     ) {

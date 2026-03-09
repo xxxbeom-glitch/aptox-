@@ -18,19 +18,23 @@ class ColeApplication : Application() {
         } catch (e: Throwable) {
             Log.e(TAG, "KakaoSdk init 실패", e)
         }
-        try {
-            startAppMonitorIfNeeded()
-        } catch (e: Throwable) {
-            Log.e(TAG, "AppMonitor 시작 실패", e)
-        }
         scheduleUsageStatsSync()
     }
 
-    private fun startAppMonitorIfNeeded() {
-        val repo = AppRestrictionRepository(this)
-        val map = repo.toRestrictionMap()
-        if (map.isNotEmpty()) {
-            AppMonitorService.start(this, map)
+    companion object {
+        private const val TAG = "ColeApplication"
+
+        /** 포그라운드 상태에서 호출. 앱 실행 시 Application.onCreate는 백그라운드로 인식될 수 있어 MainActivity.onResume에서 호출 */
+        fun startAppMonitorIfNeeded(context: android.content.Context) {
+            try {
+                val repo = AppRestrictionRepository(context)
+                val map = repo.toRestrictionMap()
+                if (map.isNotEmpty()) {
+                    AppMonitorService.start(context, map)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "AppMonitor 시작 실패", e)
+            }
         }
     }
 
@@ -69,7 +73,4 @@ class ColeApplication : Application() {
         return target - now
     }
 
-    companion object {
-        private const val TAG = "ColeApplication"
-    }
 }

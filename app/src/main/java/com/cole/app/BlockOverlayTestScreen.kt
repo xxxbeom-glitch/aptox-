@@ -33,7 +33,16 @@ fun BlockOverlayTestScreen(
         ColePrimaryButton(
             text = "오버레이 띄우기",
             onClick = {
-                context.startService(android.content.Intent(context, BlockOverlayService::class.java))
+                val intent = android.content.Intent(context, BlockOverlayService::class.java).apply {
+                    putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, "com.instagram.android")
+                    putExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS, System.currentTimeMillis() + (3 * 60 + 30) * 60_000L) // 3시간 30분
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                onBack() // 오버레이 띄운 후 테스트 화면 닫기 → 디버그 메뉴로. 오버레이만 보이게
             },
             modifier = Modifier.fillMaxWidth(),
         )

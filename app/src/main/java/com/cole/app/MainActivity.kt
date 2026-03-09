@@ -1,6 +1,7 @@
 package com.cole.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -32,12 +34,18 @@ import com.navercorp.nid.oauth.util.NidOAuthCallback
 import kotlinx.coroutines.launch
 
 @Composable
-fun ColeRootContent() {
+fun ColeRootContent(
+    pendingPauseCompleteFromOverlay: Pair<String, String>? = null,
+) {
     var showDebugMenu by remember { mutableStateOf(true) }
     if (showDebugMenu) {
-        DebugFlowHost(onStartNormalFlow = { showDebugMenu = false }, modifier = Modifier.fillMaxSize())
+        DebugFlowHost(
+            onStartNormalFlow = { showDebugMenu = false },
+            modifier = Modifier.fillMaxSize(),
+            pendingPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay,
+        )
     } else {
-        SignUpFlowHost()
+        SignUpFlowHost(pendingPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay)
     }
 }
 
@@ -66,6 +74,27 @@ class MainActivity : ComponentActivity() {
     /** 네이버 로그인 결과를 외부(코루틴)로 전달하기 위한 콜백 */
     var naverLoginCallback: NidOAuthCallback? = null
 
+    /** 앱 제한 오버레이에서 일시정지 클릭 후 표시할 pause complete 플로우 데이터 */
+    private val pendingPauseCompleteState = mutableStateOf<Pair<String, String>?>(null)
+    var pendingPauseCompleteFromOverlay: Pair<String, String>?
+        get() = pendingPauseCompleteState.value
+        set(value) { pendingPauseCompleteState.value = value }
+
+    fun clearPendingPauseCompleteFromOverlay() {
+        pendingPauseCompleteState.value = null
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingPauseCompleteState.value = extractPauseCompleteFromIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ColeApplication.startAppMonitorIfNeeded(applicationContext)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -91,6 +120,7 @@ class MainActivity : ComponentActivity() {
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = true
         }
+        pendingPauseCompleteState.value = extractPauseCompleteFromIntent(intent)
         setContent {
             ColeTheme {
                 Surface(
@@ -98,20 +128,37 @@ class MainActivity : ComponentActivity() {
                     color = AppColors.SurfaceBackgroundBackground,
                 ) {
                     if (BuildConfig.DEBUG) {
-                        ColeRootContent()
+                        ColeRootContent(pendingPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay)
                     } else {
-                        SignUpFlowHost()
+                        SignUpFlowHost(pendingPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay)
                     }
                 }
             }
         }
     }
+
+    private fun extractPauseCompleteFromIntent(i: Intent?): Pair<String, String>? {
+        if (i?.action != BlockOverlayService.ACTION_PAUSE_COMPLETE_FROM_OVERLAY) return null
+        val pkg = i.getStringExtra(BlockOverlayService.EXTRA_PACKAGE_NAME)
+        val name = i.getStringExtra(BlockOverlayService.EXTRA_APP_NAME)
+        return if (pkg != null && name != null) pkg to name else null
+    }
 }
 
 @Composable
-fun SignUpFlowHost() {
+fun SignUpFlowHost(
+    pendingPauseCompleteFromOverlay: Pair<String, String>? = null,
+) {
     val context = LocalContext.current
-    var step by remember { mutableStateOf(SignUpStep.SPLASH) }
+    val activity = context as? MainActivity
+    var step by remember {
+        mutableStateOf(
+            if (pendingPauseCompleteFromOverlay != null) SignUpStep.MAIN else SignUpStep.SPLASH
+        )
+    }
+    LaunchedEffect(pendingPauseCompleteFromOverlay) {
+        if (pendingPauseCompleteFromOverlay != null) step = SignUpStep.MAIN
+    }
     var selfTestAnswers by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
@@ -221,6 +268,8 @@ fun SignUpFlowHost() {
         SignUpStep.MAIN -> MainFlowHost(
             onAddAppClick = { step = SignUpStep.ADD_APP },
             onLogout = { step = SignUpStep.LOGIN },
+            initialPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay,
+            onPauseCompleteConsumed = { activity?.clearPendingPauseCompleteFromOverlay() },
         )
         // 비활성화: 비밀번호 찾기 플로우
         SignUpStep.PASSWORD_RESET_EMAIL,

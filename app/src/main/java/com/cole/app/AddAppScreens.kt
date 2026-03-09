@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.Settings
 import android.widget.ImageView
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,14 @@ import kotlinx.coroutines.withContext
 /** 앱 제한 플로우 헤더 상단 여백 (status bar 아래) — 메인 화면과 동일하게 18dp */
 // 회원가입 플로우와 헤더 위치 통일 (10dp)
 private val AddAppHeaderTopPadding = 10.dp
+
+private fun isAccessibilityEnabled(context: android.content.Context): Boolean {
+    val enabled = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+    ) ?: return false
+    return enabled.contains(context.packageName)
+}
 
 /** 제한 앱 추가 플로우 단계 */
 enum class AddAppStep {
@@ -251,10 +260,10 @@ fun AddAppScreenAA02A01(
 
 // ─────────────────────────────────────────────
 // AA-02A-03: 앱 선택 바텀시트 (Figma 238-2311)
-// 검색 필드 + 스크롤 리스트, 최대 3개 선택
+// 검색 필드 + 스크롤 리스트, 최대 1개 선택
 // ─────────────────────────────────────────────
 
-private const val MAX_APP_SELECTION = 5
+private const val MAX_APP_SELECTION = 1
 
 /** 앱 선택 아이템 (name: 표시명, packageName: 아이콘 로드용, null이면 placeholder) */
 private data class AppSelectItem(val name: String, val packageName: String?)
@@ -323,7 +332,7 @@ fun AddAppSelectBottomSheet(
         when {
             appName in selected -> selected = selected - appName
             selected.size >= MAX_APP_SELECTION -> {
-                Toast.makeText(context, "최대 ${MAX_APP_SELECTION}개까지 선택 가능합니다", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "앱은 1개까지만 선택하실 수 있어요", Toast.LENGTH_SHORT).show()
             }
             else -> selected = selected + appName
         }
@@ -331,7 +340,7 @@ fun AddAppSelectBottomSheet(
 
     BaseBottomSheet(
         title = "앱을 선택해주세요",
-        subtitle = "앱은 최대 ${MAX_APP_SELECTION}개까지 선택가능 해요\n이미 제한이 진행중인 앱은 선택하실 수 없어요",
+        subtitle = "앱은 1개까지만 선택가능 해요\n이미 제한이 진행중인 앱은 선택하실 수 없어요",
         onDismissRequest = onDismissRequest,
         onPrimaryClick = {
             if (selected.isNotEmpty()) {
@@ -1116,7 +1125,7 @@ fun AddAppAppCategoryBottomSheet(
         title = "앱의 종류를 지정해주세요",
         onDismissRequest = onDismissRequest,
         onPrimaryClick = { onPrimaryClick(APP_CATEGORY_OPTIONS[selectedIndex]) },
-        primaryButtonText = "완료",
+        primaryButtonText = "다음",
         modifier = modifier,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1298,6 +1307,7 @@ fun AddAppFlowHost(
     var showDailyTimeSheet by remember { mutableStateOf(false) }
     var showDailyDaysSheet by remember { mutableStateOf(false) }
     var showDailyDurationSheet by remember { mutableStateOf(false) }
+    var showAccessibilityRequiredSheet by remember { mutableStateOf(false) }
     val timeSteps = listOf("30분", "60분", "120분", "180분", "240분", "360분")
     // 일일사용량 제한 플로우 상태
     var dailyLimitMinutes by remember { mutableStateOf<String?>(null) }
@@ -1345,7 +1355,13 @@ fun AddAppFlowHost(
                 selectedTimeLimit = null
                 step = AddAppStep.AA_02A_TIME_01
             },
-            onBlockClick = { step = AddAppStep.AA_02B_02 },
+            onBlockClick = {
+                if (isAccessibilityEnabled(context)) {
+                    step = AddAppStep.AA_02B_02
+                } else {
+                    showAccessibilityRequiredSheet = true
+                }
+            },
             onBackClick = { step = AddAppStep.AA_01 },
         )
         // 일일사용량 제한 플로우 (5화면)
@@ -1394,12 +1410,12 @@ fun AddAppFlowHost(
                     subtitle = "본인의 사용패턴을 생각해 시간을 선택해주세요",
                     steps = DAILY_TIME_STEPS,
                     feedbackMessages = listOf(
-                        "초보자가 시작하기에 딱 좋은 시간이에요!",
-                        "아주 적당한 선택이에요!",
-                        "충분한 여유가 있어요!",
-                        "적절한 시간이에요!",
-                        "넉넉한 시간이에요!",
-                        "충분한 시간이에요!",
+                        "하루 30분, 스마트폰과 거리두기의 첫걸음이에요",
+                        "하루 1시간 제한, 자기관리가 시작됐어요",
+                        "딱 필요한 만큼만, 현명한 선택이에요",
+                        "하루 2시간, 일상과 디지털의 균형점이에요",
+                        "넉넉하지만 그래도 제한하는 당신, 대단해요",
+                        "3시간 제한도 훌륭한 출발이에요. 조금씩 줄여봐요!",
                     ),
                     initialIndex = dailyLimitMinutes?.let { DAILY_TIME_STEPS.indexOf(it) }?.takeIf { it >= 0 } ?: 0,
                     onDismissRequest = { showDailyTimeSheet = false },
@@ -1531,11 +1547,11 @@ fun AddAppFlowHost(
                     steps = timeSteps,
                     feedbackMessages = listOf(
                         "초보자가 시작하기에 딱 좋은 시간이에요!",
-                        "아주 적당한 선택이에요!",
-                        "적절한 시간이에요!",
-                        "넉넉한 시간이에요!",
-                        "충분한 시간이에요!",
-                        "여유로운 시간이에요!",
+                        "하루 1시간, 변화가 시작되는 시간이에요",
+                        "집중력이 눈에 띄게 달라질 거예요",
+                        "웬만한 사람은 버티기 힘든 도전이에요",
+                        "하루 4시간, 진짜 디톡스가 시작돼요",
+                        "극한의 절제, 당신은 이미 다른 레벨이에요",
                     ),
                     initialIndex = selectedTimeLimit?.let { timeSteps.indexOf(it) }?.takeIf { it >= 0 } ?: 0,
                     onDismissRequest = { showTimeLimitSheet = false },
@@ -1544,6 +1560,19 @@ fun AddAppFlowHost(
                         showTimeLimitSheet = false
                     },
                     primaryButtonText = "완료",
+                )
+            }
+            if (showAccessibilityRequiredSheet) {
+                BaseBottomSheet(
+                    title = "앱 차단을 위해 접근성 권한이 필요해요",
+                    subtitle = "설정 > 접근성 > 설치된 앱에서 ${context.getString(R.string.app_name)} 를 찾아 활성화해주세요",
+                    onDismissRequest = { showAccessibilityRequiredSheet = false },
+                    onPrimaryClick = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        showAccessibilityRequiredSheet = false
+                    },
+                    primaryButtonText = "설정하러 가기",
+                    content = {},
                 )
             }
         }

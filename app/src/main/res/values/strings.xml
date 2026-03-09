@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">cole</string>
+    <string name="accessibility_service_description">cole 앱 차단 기능을 위해 사용됩니다. 제한된 앱 사용을 감지하고 차단 화면을 표시합니다.</string>
 </resources>

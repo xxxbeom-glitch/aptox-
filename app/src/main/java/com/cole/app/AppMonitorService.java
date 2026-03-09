@@ -31,21 +31,22 @@ public class AppMonitorService extends Service {
     private long lastCheckedTime = System.currentTimeMillis();
     /** MOVE_TO_FOREGROUND/BACKGROUND 이벤트로 유지되는 현재 포그라운드 앱 */
     private String lastKnownForegroundPkg = null;
-    /** 일시정지 1분 전 알림을 이미 보낸 패키지 (중복 방지) */
-    private final java.util.Set<String> pauseWarningNotifiedPkgs = new java.util.HashSet<>();
 
     @Override
     public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        boolean clearForegroundPkg = intent != null && intent.getBooleanExtra(EXTRA_CLEAR_FOREGROUND_PKG, false);
         Map<String, Integer> restrictionMap = intent != null
             ? parseRestrictionMap(intent.getStringExtra(EXTRA_RESTRICTION_MAP))
             : Collections.emptyMap();
 
-        currentRestrictionMap = restrictionMap;
+        if (!restrictionMap.isEmpty()) {
+            currentRestrictionMap = restrictionMap;
+        }
         lastCheckedTime = System.currentTimeMillis();
-        Log.d(TAG, "서비스 시작/갱신 | restrictionMap=" + currentRestrictionMap);
+        Log.d(TAG, "서비스 시작/갱신 | restrictionMap=" + currentRestrictionMap + " clearFg=" + clearForegroundPkg);
 
         if (!isRunning) {
             isRunning = true;
@@ -55,6 +56,11 @@ public class AppMonitorService extends Service {
             scheduleEventCheck();
         } else {
             handler.removeCallbacksAndMessages(null);
+            if (clearForegroundPkg) {
+                // 오버레이 닫기 또는 일시정지 종료 후 호출 시 포그라운드 앱 초기화
+                // (제한 앱이 아직 포그라운드로 기록된 경우 즉시 차단되는 것을 방지)
+                lastKnownForegroundPkg = null;
+            }
             scheduleEventCheck();
         }
         return START_STICKY;
@@ -146,23 +152,12 @@ public class AppMonitorService extends Service {
     }
 
     private void checkAndBlockPackage(UsageStatsManager usm, String pkg) {
-        // 일시정지 중이면 차단 건너뜀 + 1분 전 알림 체크
+        // 일시정지 중이면 차단 건너뜀 (타이머 알림은 PauseTimerNotificationService가 담당)
         PauseRepository pauseRepo = new PauseRepository(this);
         if (pauseRepo.isPaused(pkg)) {
-            long pauseUntilMs = pauseRepo.getPauseUntilMs(pkg);
-            long remainingMs = pauseUntilMs - System.currentTimeMillis();
-            // 남은 시간이 60초 이하이고 아직 알림을 보내지 않은 경우
-            if (remainingMs <= 60_000L && !pauseWarningNotifiedPkgs.contains(pkg)) {
-                pauseWarningNotifiedPkgs.add(pkg);
-                sendPauseWarningNotification(pkg);
-                Log.d(TAG, "일시정지 1분 전 알림 전송: " + pkg);
-            }
-            // 일시정지가 끝나면 알림 전송 기록 초기화 (다음 일시정지에 다시 알림 가능)
             Log.d(TAG, "일시정지 중 - 차단 건너뜀: " + pkg);
             return;
         }
-        // 일시정지가 끝났으면 알림 전송 기록 초기화
-        pauseWarningNotifiedPkgs.remove(pkg);
 
         AppRestrictionRepository repo = new AppRestrictionRepository(this);
         com.cole.app.model.AppRestriction restriction = null;
@@ -177,7 +172,7 @@ public class AppMonitorService extends Service {
             long remainingMin = (restriction.getBlockUntilMs() - System.currentTimeMillis()) / 60000;
             Log.d(TAG, "체크(시간지정) | " + pkg + " 종료까지 " + remainingMin + "분 남음");
             if (!shouldBlock) {
-                repo.delete(pkg);
+                // 메인 "진행중인 앱"에서 만료된 시간지정 앱을 "해제됨"으로 표시하려고 repo에서 삭제하지 않음
                 Map<String, Integer> newMap = new HashMap<>(currentRestrictionMap);
                 newMap.remove(pkg);
                 currentRestrictionMap = newMap;
@@ -242,32 +237,6 @@ public class AppMonitorService extends Service {
         return total;
     }
 
-    private void sendPauseWarningNotification(String pkg) {
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
-
-        String appName = pkg;
-        try {
-            appName = (String) getPackageManager().getApplicationLabel(
-                getPackageManager().getApplicationInfo(pkg, 0));
-        } catch (Exception ignored) {}
-
-        PendingIntent pi = PendingIntent.getActivity(this, 0,
-            getPackageManager().getLaunchIntentForPackage(getPackageName()),
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_PAUSE_WARNING_ID)
-            .setContentTitle(appName)
-            .setContentText("1분 후 다시 사용이 제한됩니다")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentIntent(pi)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build();
-
-        nm.notify(NOTIFICATION_PAUSE_WARNING_ID_BASE + pkg.hashCode(), notification);
-    }
-
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -275,10 +244,6 @@ public class AppMonitorService extends Service {
             NotificationChannel monitorChannel = new NotificationChannel(
                 CHANNEL_ID, "앱 모니터링", NotificationManager.IMPORTANCE_LOW);
             nm.createNotificationChannel(monitorChannel);
-            NotificationChannel warningChannel = new NotificationChannel(
-                CHANNEL_PAUSE_WARNING_ID, "일시정지 종료 알림", NotificationManager.IMPORTANCE_HIGH);
-            warningChannel.setDescription("일시정지 1분 전 알림");
-            nm.createNotificationChannel(warningChannel);
         }
     }
 
@@ -295,19 +260,26 @@ public class AppMonitorService extends Service {
     }
 
     private static final String CHANNEL_ID = "app_monitor";
-    private static final String CHANNEL_PAUSE_WARNING_ID = "pause_warning";
     private static final int NOTIFICATION_ID = 1001;
-    private static final int NOTIFICATION_PAUSE_WARNING_ID_BASE = 2000;
     private static final long EVENT_CHECK_INTERVAL_MS = 1_000L;
     private static final String SEP_ITEM = "|";
     private static final String SEP_KV = ":";
     public static final String EXTRA_RESTRICTION_MAP = "restriction_map";
+    public static final String EXTRA_CLEAR_FOREGROUND_PKG = "clear_foreground_pkg";
 
     public static void start(Context context) {
         start(context, Collections.emptyMap());
     }
 
     public static void start(Context context, Map<String, Integer> restrictionMap) {
+        start(context, restrictionMap, false);
+    }
+
+    public static void startAndClearForeground(Context context) {
+        start(context, Collections.emptyMap(), true);
+    }
+
+    public static void start(Context context, Map<String, Integer> restrictionMap, boolean clearForegroundPkg) {
         Intent intent = new Intent(context, AppMonitorService.class);
         if (restrictionMap != null && !restrictionMap.isEmpty()) {
             StringBuilder sb = new StringBuilder();
@@ -316,6 +288,9 @@ public class AppMonitorService extends Service {
                 sb.append(e.getKey()).append(SEP_KV).append(e.getValue());
             }
             intent.putExtra(EXTRA_RESTRICTION_MAP, sb.toString());
+        }
+        if (clearForegroundPkg) {
+            intent.putExtra(EXTRA_CLEAR_FOREGROUND_PKG, true);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent);

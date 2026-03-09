@@ -1,0 +1,148 @@
+{
+  "badges": {
+    "badge_001": {
+      "id": "badge_001",
+      "order": 1,
+      "title": "첫 걸음",
+      "description": "디지털 디톡스의 시작",
+      "condition": "처음으로 앱 제한 설정 완료",
+      "icon": "ico_level1"
+    },
+    "badge_002": {
+      "id": "badge_002",
+      "order": 2,
+      "title": "절제의 길",
+      "description": "꾸준히 걷고 있는 중",
+      "condition": "제한 설정 7일 연속 달성",
+      "icon": "ico_level2"
+    },
+    "badge_003": {
+      "id": "badge_003",
+      "order": 3,
+      "title": "절제 완성",
+      "description": "절제가 습관이 된 사람",
+      "condition": "제한 설정 30일 연속 달성",
+      "icon": "ico_level3"
+    },
+    "badge_004": {
+      "id": "badge_004",
+      "order": 4,
+      "title": "첫 성취",
+      "description": "오늘 하루를 지켜냈어요",
+      "condition": "일일 사용량 제한 첫 달성",
+      "icon": "ico_level4"
+    },
+    "badge_005": {
+      "id": "badge_005",
+      "order": 5,
+      "title": "꾸준한 실천",
+      "description": "반복이 실력이 되는 중",
+      "condition": "일일 사용량 제한 누적 7회 달성",
+      "icon": "ico_level5"
+    },
+    "badge_006": {
+      "id": "badge_006",
+      "order": 6,
+      "title": "불굴의 의지",
+      "description": "의지력이 증명된 사람",
+      "condition": "일일 사용량 제한 누적 30회 달성",
+      "icon": "ico_level6"
+    },
+    "badge_007": {
+      "id": "badge_007",
+      "order": 7,
+      "title": "집중 시작",
+      "description": "집중의 첫 불꽃",
+      "condition": "시간지정 차단 첫 성공",
+      "icon": "ico_level7"
+    },
+    "badge_008": {
+      "id": "badge_008",
+      "order": 8,
+      "title": "집중 유지",
+      "description": "집중력이 단단해지는 중",
+      "condition": "시간지정 차단 누적 7회 성공",
+      "icon": "ico_level8"
+    },
+    "badge_009": {
+      "id": "badge_009",
+      "order": 9,
+      "title": "집중 마스터",
+      "description": "집중력의 끝판왕",
+      "condition": "시간지정 차단 누적 30회 성공",
+      "icon": "ico_level9"
+    },
+    "badge_010": {
+      "id": "badge_010",
+      "order": 10,
+      "title": "야간 절제",
+      "description": "밤을 지킨 첫날",
+      "condition": "밤 10시 이후 차단 첫 성공",
+      "icon": "ico_level10"
+    },
+    "badge_011": {
+      "id": "badge_011",
+      "order": 11,
+      "title": "야간 수호",
+      "description": "수면을 스스로 지키는 사람",
+      "condition": "밤 10시 이후 차단 7일 연속 성공",
+      "icon": "ico_level11"
+    },
+    "badge_012": {
+      "id": "badge_012",
+      "order": 12,
+      "title": "야간 마스터",
+      "description": "건강한 수면 루틴 완성",
+      "condition": "밤 10시 이후 차단 30일 연속 성공",
+      "icon": "ico_level12"
+    },
+    "badge_013": {
+      "id": "badge_013",
+      "order": 13,
+      "title": "첫 차단",
+      "description": "유혹을 처음으로 막아냈어요",
+      "condition": "차단 중 앱 접근 시도 첫 방어",
+      "icon": "ico_level13"
+    },
+    "badge_014": {
+      "id": "badge_014",
+      "order": 14,
+      "title": "철벽 수비",
+      "description": "흔들리지 않는 의지",
+      "condition": "차단 중 앱 접근 시도 누적 50회 방어",
+      "icon": "ico_level14"
+    },
+    "badge_015": {
+      "id": "badge_015",
+      "order": 15,
+      "title": "난공불락",
+      "description": "어떤 유혹도 통하지 않는 사람",
+      "condition": "차단 중 앱 접근 시도 누적 200회 방어",
+      "icon": "ico_level15"
+    },
+    "badge_016": {
+      "id": "badge_016",
+      "order": 16,
+      "title": "첫 도전",
+      "description": "변화가 시작됐어요",
+      "condition": "총 사용시간 10% 감소 달성",
+      "icon": "ico_level16"
+    },
+    "badge_017": {
+      "id": "badge_017",
+      "order": 17,
+      "title": "도전 계속",
+      "description": "눈에 띄는 변화가 생겼어요",
+      "condition": "총 사용시간 30% 감소 달성",
+      "icon": "ico_level17"
+    },
+    "badge_018": {
+      "id": "badge_018",
+      "order": 18,
+      "title": "도전 완주",
+      "description": "완전히 다른 삶을 살고 있어요",
+      "condition": "총 사용시간 50% 감소 달성",
+      "icon": "ico_level18"
+    }
+  }
+}

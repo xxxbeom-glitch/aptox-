@@ -303,8 +303,6 @@ fun SelectionRow(
 // ─────────────────────────────────────────────────────────────────────────────
 
 private val SettingsDividerColor = Color(0xFFF3F3F3)
-private val SettingsBadgeAllowed = Color(0xFF616bff)   // 허용됨
-private val SettingsBadgeRequired = Color(0xFFe44242)  // 필요
 
 @Composable
 fun SettingsRow(
@@ -312,6 +310,8 @@ fun SettingsRow(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 소셜 아이콘처럼 자체 배경이 있는 경우 true (30dp 원본 사이즈 유지) */
+    iconWithoutBackground: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -322,14 +322,17 @@ fun SettingsRow(
         Box(
             modifier = Modifier
                 .size(30.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(AppColors.Primary200),
+                .then(
+                    if (iconWithoutBackground) Modifier
+                    else Modifier.clip(RoundedCornerShape(6.dp)).background(AppColors.Primary200)
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Image(
                 painter = painterResource(iconResId),
                 contentDescription = label,
                 contentScale = ContentScale.None,
+                modifier = if (iconWithoutBackground) Modifier.size(30.dp) else Modifier,
             )
         }
         Spacer(modifier = Modifier.width(10.dp))
@@ -363,52 +366,33 @@ fun SettingsRowWithBadge(
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(AppColors.Primary200),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(iconResId),
-                contentDescription = label,
-                contentScale = ContentScale.None,
-            )
-        }
-        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = label,
-                    style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (badgeAllowed) SettingsBadgeAllowed else SettingsBadgeRequired)
-                        .padding(horizontal = 4.dp, vertical = 3.dp),
-                ) {
-                    Text(
-                        text = badgeText,
-                        style = AppTypography.Label.copy(color = AppColors.TextInvert, fontSize = 9.sp),
-                    )
-                }
-            }
+            Text(
+                text = label,
+                style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+            )
             Text(
                 text = subtitle,
                 style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
             )
         }
-        Icon(
-            painter = painterResource(R.drawable.ic_chevron_right),
-            contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = AppColors.TextPrimary,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = badgeText,
+                style = AppTypography.Caption1.copy(
+                    color = if (badgeAllowed) AppColors.TextCaption else AppColors.Red300,
+                ),
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = AppColors.TextPrimary,
+            )
+        }
     }
 }
 
@@ -505,4 +489,36 @@ fun SettingsDivider(modifier: Modifier = Modifier) {
             .height(1.dp)
             .background(SettingsDividerColor),
     )
+}
+
+@Composable
+fun SettingsRowWithToggle(
+    label: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = subtitle,
+                style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+            )
+        }
+        ColeToggleSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
+    }
 }

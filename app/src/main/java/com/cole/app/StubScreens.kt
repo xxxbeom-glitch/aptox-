@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
@@ -52,13 +54,19 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.util.Log
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import java.util.Calendar
 
 /** 자가테스트 결과 레벨 (8~32점 구간) */
@@ -458,9 +466,9 @@ private fun MainAddictionCard(
 private sealed class SettingsDetail(val title: String) {
     data object AccountManage : SettingsDetail("계정관리")
     data object Subscription : SettingsDetail("구독관리")
+    data object Notification : SettingsDetail("알림")
     data object Permission : SettingsDetail("권한설정")
-    data object AppInfo : SettingsDetail("정보")
-    data object OpenSource : SettingsDetail("오픈소스 라이센스")
+    data object Withdraw : SettingsDetail("탈퇴하기")
 }
 
 /** MA-01 메인 화면: 실제 AppRestrictionRepository 데이터 사용 (Figma 336-2910) */
@@ -545,9 +553,7 @@ private fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem>
         val isTimeSpecified = restriction.blockUntilMs > 0
         if (isTimeSpecified) {
             val remainingMs = restriction.blockUntilMs - System.currentTimeMillis()
-            // 시간 지정 제한이 이미 만료된 앱은 리스트에서 제외
-            if (remainingMs <= 0) return@mapNotNull null
-            val remainingMin = remainingMs / 60000
+            val remainingMin = (remainingMs / 60000).toInt().coerceAtLeast(0)
             val todayMinutes = (usm?.let { getTodayUsageMinutes(it, restriction.packageName) } ?: 0).toInt().coerceAtLeast(0)
             val isPaused = pauseRepo.isPaused(restriction.packageName)
             val pauseUsedCount = pauseRepo.getTodayCount(restriction.packageName)
@@ -557,12 +563,15 @@ private fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem>
             val pauseLeftMin = (pauseLeftMs / 60000).toInt()
             val pauseLeftSec = ((pauseLeftMs % 60000) / 1000).toInt()
             // 일시정지 중: "2/5분" (빨강) + "일시정지 중" (secondary)
+            // 만료됨: "해제됨" + "종료" (secondary)
             // 정상: "32분 후" (highlight) + "제한 해제" (secondary)
-            val (usageText, usageLabel) = if (isPaused) {
-                val maxPauseMin = 5
-                "${pauseLeftMin}/${maxPauseMin}분" to "일시정지 중"
-            } else {
-                "${remainingMin}분 후" to "제한 해제"
+            val (usageText, usageLabel) = when {
+                isPaused -> {
+                    val maxPauseMin = 5
+                    "${pauseLeftMin}/${maxPauseMin}분" to "일시정지 중"
+                }
+                remainingMs <= 0 -> "해제됨" to "종료"
+                else -> "${remainingMin}분 후" to "제한 해제"
             }
             MainAppRestrictionItem(
                 appName = restriction.appName,
@@ -578,11 +587,17 @@ private fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem>
                 pauseUsedCount = pauseUsedCount,
                 pauseRemainingCount = pauseRemainingCount,
                 pauseLeftMin = pauseLeftMin,
-                usageTextColor = if (isPaused) AppColors.Red300 else AppColors.TextHighlight,
+                usageTextColor = when {
+                    isPaused -> AppColors.Red300
+                    remainingMs <= 0 -> AppColors.TextSecondary
+                    else -> AppColors.TextHighlight
+                },
                 usageLabelColor = AppColors.TextSecondary,
             )
         } else {
-            val todayMinutes = (usm?.let { getTodayUsageMinutes(it, restriction.packageName) } ?: 0).toInt().coerceAtLeast(0)
+            val rawToday = DebugTestSettings.debugTodayUsageMinutes
+                ?: usm?.let { getTodayUsageMinutes(it, restriction.packageName) } ?: 0L
+            val todayMinutes = rawToday.toInt().coerceAtLeast(0)
             val todaySessionCount = (usm?.let { getTodaySessionCount(it, restriction.packageName) } ?: 0).toInt().coerceAtLeast(0)
             val limitMinutes = restriction.limitMinutes
             MainAppRestrictionItem(
@@ -670,10 +685,15 @@ fun MainFlowHost(
     onAddAppClick: () -> Unit,
     onLogout: () -> Unit,
     isFreeUser: Boolean = true,
+    initialPauseCompleteFromOverlay: Pair<String, String>? = null,
+    onPauseCompleteConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var navIndex by remember { mutableIntStateOf(0) }
     var settingsDetail by remember { mutableStateOf<SettingsDetail?>(null) }
+    var showBugReportSheet by remember { mutableStateOf(false) }
+    var showTermsSheet by remember { mutableStateOf(false) }
+    var showPrivacySheet by remember { mutableStateOf(false) }
     var showSubscriptionGuide by remember { mutableStateOf(false) }
     var showAppLimitInfoSheet by remember { mutableStateOf(false) }
     var selectedAppForDetail by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
@@ -684,6 +704,20 @@ fun MainFlowHost(
     var showPauseCompleteSheet by remember { mutableStateOf(false) }
     var selectedAppForPause by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
 
+    // 앱 제한 오버레이에서 일시정지 클릭 후 Cole 앱으로 진입 시 pause complete 바텀시트 표시
+    LaunchedEffect(initialPauseCompleteFromOverlay) {
+        val pending = initialPauseCompleteFromOverlay ?: return@LaunchedEffect
+        val (packageName, appName) = pending
+        selectedAppForPause = MainAppRestrictionItem(
+            appName = appName,
+            packageName = packageName,
+            usageText = "",
+            usageLabel = "",
+            showDetailButton = false,
+        )
+        showPauseCompleteSheet = true
+    }
+
     val navDestinations = listOf(
         NavDestination("홈", R.drawable.ic_nav_home_inactive, R.drawable.ic_nav_home_active),
         NavDestination("챌린지", R.drawable.ic_nav_challenge_inactive, R.drawable.ic_nav_challenge_active),
@@ -691,21 +725,10 @@ fun MainFlowHost(
         NavDestination("설정", R.drawable.ic_nav_mypage_inactive, R.drawable.ic_nav_mypage_active),
     )
 
-    // 통계/챌린지/설정: 아래 스크롤 시 바텀바 숨김, 위 스크롤 시 표시
-    var bottomBarVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(navIndex) {
-        bottomBarVisible = true // 탭 전환 시 바텀바 다시 표시
-    }
-    LaunchedEffect(settingsDetail) {
-        bottomBarVisible = true // 설정 세부 화면 진입 시에도 바텀바 표시 (짧은 화면에서 스크롤 없이 숨겨진 상태 유지 방지)
-    }
+    // 바텀바 항상 표시 (스크롤 시 숨김 비활성화)
     val scrollToHideConnection = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (navIndex !in listOf(1, 2, 3)) return Offset.Zero
-                val dy = consumed.y
-                if (dy > 8f) bottomBarVisible = true   // 아래로 스크롤 → 바텀바 표시
-                else if (dy < -8f) bottomBarVisible = false // 위로 스크롤 → 바텀바 숨김
                 return Offset.Zero
             }
         }
@@ -716,180 +739,254 @@ fun MainFlowHost(
     val navBarPaddingDp = with(density) { navBarInsetBottom.toDp() }
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
-    // 측정값에 windowInsetsPadding 포함됨 (navBar inset 포함)
-    val barHeightPx = bottomBarHeightPx
-    val bottomBarOffsetY by animateFloatAsState(
-        targetValue = if (bottomBarVisible) 0f else 1f,
-        animationSpec = tween(250),
-        label = "bottomBarOffset",
-    )
     // 시스템 네비바 영역 채움: 프리미엄 배너(#2B2B2B) / 유료(카드 배경)
     val bottomFillColor = if (isFreeUser) Color(0xFF2B2B2B) else AppColors.SurfaceBackgroundCard
 
-    // 바텀바 숨김 시 콘텐츠 하단 패딩 축소해 빈 공간 방지
-    val contentBottomPadding = if (bottomBarHeightDp > 0.dp) {
-        if (bottomBarVisible) bottomBarHeightDp else navBarPaddingDp
-    } else 122.dp
+    // 설정 2depth: 하단 앱바 비노출
+    val isSettings2Depth = navIndex == 3 && settingsDetail != null
+    // 바텀바 하단 패딩 (설정 2depth일 땐 앱바 숨김 → 시스템 네비바만 적용)
+    val contentBottomPadding = when {
+        isSettings2Depth -> navBarPaddingDp
+        bottomBarHeightDp > 0.dp -> bottomBarHeightDp
+        else -> 122.dp
+    }
 
-    Box(modifier = Modifier.fillMaxSize().background(AppColors.SurfaceBackgroundBackground)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 18.dp)
-                .padding(bottom = contentBottomPadding),
-        ) {
-        // 헤더 (설정 2차뎁스일 때만 Sub 헤더; 탭 전환 시 settingsDetail 초기화됨)
-        when {
-            navIndex == 3 && settingsDetail != null -> ColeHeaderSub(
-                title = settingsDetail!!.title,
-                backIcon = painterResource(R.drawable.ic_back),
-                onBackClick = { settingsDetail = null },
-                showNotification = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            navIndex == 0 -> ColeHeaderHome(
-                logo = painterResource(R.drawable.ic_logo),
-                hasNotification = true,
-            )
-            navIndex == 1 -> ColeHeaderTitleWithNotification(
-                title = "챌린지",
-                hasNotification = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            navIndex == 2 -> ColeHeaderTitleWithNotification(
-                title = "통계",
-                hasNotification = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            navIndex == 3 -> ColeHeaderTitleWithNotification(
-                title = "설정",
-                hasNotification = true,
-            )
-            else -> ColeHeaderHome(
-                logo = painterResource(R.drawable.ic_logo),
-                hasNotification = true,
-            )
-        }
-
-            // 탭 컨텐츠
-            when (navIndex) {
-            0 -> {
-                Box(modifier = Modifier.weight(1f)) {
-                    MainScreenMA01(
-                        onAddAppClick = onAddAppClick,
-                        onDetailClick = { item ->
-                            selectedAppForDetail = item
-                            showAppLimitInfoSheet = true
-                        },
-                        onStatisticsClick = { navIndex = 2 },
-                    )
-                }
-            }
-            1 -> {
-                Column(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollToHideConnection)) {
-                    ChallengeScreen()
-                }
-            }
-            2 -> {
-                Column(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollToHideConnection)) {
-                    StatisticsScreen()
-                }
-            }
-            3 -> {
-                Column(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollToHideConnection)) {
-                    when (settingsDetail) {
-                        SettingsDetail.AccountManage -> AccountManageScreen(
-                            onBack = { settingsDetail = null },
-                            onProfileClick = { },
-                        )
-                        SettingsDetail.Subscription -> SubscriptionManageScreen(
-                            onBack = { settingsDetail = null },
-                        )
-                        SettingsDetail.Permission -> PermissionSettingsScreen(
-                            onBack = { settingsDetail = null },
-                            onAccessibilityClick = { },
-                            onUsageStatsClick = { },
-                            onOverlayClick = { },
-                        )
-                        SettingsDetail.AppInfo -> AppInfoScreen(
-                            onBack = { settingsDetail = null },
-                            onTermsClick = { },
-                            onPrivacyClick = { },
-                        )
-                        SettingsDetail.OpenSource -> OpenSourceScreen(
-                            onBack = { settingsDetail = null },
-                        )
-                        null -> MyPageScreen(
-                            onAccountManageClick = { settingsDetail = SettingsDetail.AccountManage },
-                            onSubscriptionManageClick = { settingsDetail = SettingsDetail.Subscription },
-                            onNotificationClick = { },
-                            onPermissionClick = { settingsDetail = SettingsDetail.Permission },
-                            onAppInfoClick = { settingsDetail = SettingsDetail.AppInfo },
-                            onOpenSourceClick = { settingsDetail = SettingsDetail.OpenSource },
-                            onWithdrawClick = { },
-                        )
-                    }
-                }
-            }
-            else -> {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = "준비중",
-                        style = AppTypography.HeadingH3.copy(color = AppColors.TextSecondary),
-                    )
-                }
-            }
-        }
-        }
-
-        // 시스템 네비바 영역 채움 (바텀바 숨김 시에도 항상 표시)
-        if (navBarInsetBottom > 0) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(navBarPaddingDp)
-                    .background(bottomFillColor),
-            )
-        }
-        // ── 바텀바 (스크롤 시 숨김, 시스템 네비 영역 위에서 클리핑해 애매하게 보이지 않게) ──
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(bottom = navBarPaddingDp)
-                .graphicsLayer { clip = true },
-        ) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = AppColors.SurfaceBackgroundBackground,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .graphicsLayer { translationY = bottomBarOffsetY * barHeightPx }
-                    .onGloballyPositioned { coordinates ->
-                        bottomBarHeightPx = coordinates.size.height
-                    },
+                    .background(AppColors.SurfaceBackgroundBackground)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 10.dp)
             ) {
-                ColeBottomNavBar(
-                    destinations = navDestinations,
-                    selectedIndex = navIndex,
-                    onTabSelected = {
-                        if (it != navIndex) {
-                            navIndex = it
-                            if (it != 3) settingsDetail = null
+                when {
+                    navIndex == 0 -> ColeHeaderHome(
+                        logo = painterResource(R.drawable.ic_logo),
+                        hasNotification = true,
+                    )
+                    navIndex == 1 -> ColeHeaderTitleWithNotification(
+                        title = "챌린지",
+                        hasNotification = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    navIndex == 2 -> ColeHeaderTitleWithNotification(
+                        title = "통계",
+                        hasNotification = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    navIndex == 3 && settingsDetail != null -> ColeHeaderSub(
+                        title = settingsDetail!!.title,
+                        backIcon = painterResource(R.drawable.ic_back),
+                        onBackClick = {
+                            settingsDetail = when (settingsDetail) {
+                                SettingsDetail.Withdraw -> SettingsDetail.AccountManage
+                                else -> null
+                            }
+                        },
+                        showNotification = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    navIndex == 3 -> ColeHeaderTitleWithNotification(
+                        title = "설정",
+                        hasNotification = true,
+                    )
+                    else -> ColeHeaderHome(
+                        logo = painterResource(R.drawable.ic_logo),
+                        hasNotification = true,
+                    )
+                }
+            }
+        },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(bottom = contentBottomPadding),
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                when (navIndex) {
+                    0 -> {
+                        Box(modifier = Modifier.weight(1f)) {
+                            MainScreenMA01(
+                                onAddAppClick = onAddAppClick,
+                                onDetailClick = { item ->
+                                    selectedAppForDetail = item
+                                    showAppLimitInfoSheet = true
+                                },
+                                onStatisticsClick = { navIndex = 2 },
+                            )
                         }
-                    },
-                    showPremiumBanner = isFreeUser,
-                    onPremiumClick = { if (isFreeUser) showSubscriptionGuide = true },
+                    }
+                    1 -> ChallengeScreen(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .nestedScroll(scrollToHideConnection),
+                    )
+                    2 -> StatisticsScreen(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .nestedScroll(scrollToHideConnection),
+                    )
+                    3 -> {
+                        Column(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollToHideConnection)) {
+                            when (settingsDetail) {
+                                SettingsDetail.AccountManage -> AccountManageScreen(
+                                    onBack = { settingsDetail = null },
+                                    onProfileClick = { },
+                                    onWithdrawClick = { settingsDetail = SettingsDetail.Withdraw },
+                                )
+                                SettingsDetail.Subscription -> SubscriptionManageScreen(
+                                    onBack = { settingsDetail = null },
+                                    onCancelSubscription = {
+                                        val uri = Uri.parse("https://play.google.com/store/account/subscriptions")
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+                                            setPackage("com.android.vending")
+                                        })
+                                    },
+                                )
+                                SettingsDetail.Notification -> NotificationSettingsScreen(
+                                    onBack = { settingsDetail = null },
+                                )
+                                SettingsDetail.Permission -> PermissionSettingsScreen(
+                                    onBack = { settingsDetail = null },
+                                    onAccessibilityClick = {
+                                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                    },
+                                    onUsageStatsClick = {
+                                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    },
+                                    onOverlayClick = {
+                                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                            .setData(Uri.parse("package:${context.packageName}"))
+                                        context.startActivity(intent)
+                                    },
+                                )
+                                SettingsDetail.Withdraw -> WithdrawConfirmScreen(
+                                    onBack = { settingsDetail = SettingsDetail.AccountManage },
+                                    onConfirmWithdraw = {
+                                        settingsDetail = null
+                                        // TODO: 실제 탈퇴 API 호출 후 로그아웃 등 처리
+                                    },
+                                )
+                                null -> MyPageScreen(
+                                    onAccountManageClick = { settingsDetail = SettingsDetail.AccountManage },
+                                    onSubscriptionManageClick = { settingsDetail = SettingsDetail.Subscription },
+                                    onNotificationClick = { settingsDetail = SettingsDetail.Notification },
+                                    onPermissionClick = { settingsDetail = SettingsDetail.Permission },
+                                    onBugReportClick = { showBugReportSheet = true },
+                                    onTermsClick = { showTermsSheet = true },
+                                    onPrivacyClick = { showPrivacySheet = true },
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = "준비중",
+                                style = AppTypography.HeadingH3.copy(color = AppColors.TextSecondary),
+                            )
+                        }
+                    }
+                }
+            }
+            }
+
+            // 시스템 네비바 영역 채움 (바텀바 숨김 시에도 항상 표시)
+            if (navBarInsetBottom > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(navBarPaddingDp)
+                        .background(bottomFillColor),
                 )
             }
+            // ── 바텀바 (설정 2depth 제외 시 표시) ──
+            if (!isSettings2Depth) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .onGloballyPositioned { coordinates ->
+                            bottomBarHeightPx = coordinates.size.height
+                        },
+                ) {
+                    ColeBottomNavBar(
+                        destinations = navDestinations,
+                        selectedIndex = navIndex,
+                        onTabSelected = {
+                            if (it != navIndex) {
+                                navIndex = it
+                                if (it != 3) settingsDetail = null
+                            }
+                        },
+                        showPremiumBanner = isFreeUser,
+                        onPremiumClick = { if (isFreeUser) showSubscriptionGuide = true },
+                    )
+                }
+            }
+        }
+
+        // 버그 신고 바텀시트
+        if (showBugReportSheet) {
+            val scope = rememberCoroutineScope()
+            BugReportBottomSheet(
+                onDismiss = { showBugReportSheet = false },
+                onSubmit = { content ->
+                    scope.launch {
+                        try {
+                            FirebaseFunctions.getInstance()
+                                .getHttpsCallable("submitBugReport")
+                                .call(hashMapOf("content" to content))
+                                .await()
+                            showBugReportSheet = false
+                            android.widget.Toast.makeText(
+                                context,
+                                "버그 신고가 등록되었어요. 감사해요!",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } catch (e: Exception) {
+                            val msg = when (e) {
+                                is FirebaseFunctionsException -> when (e.code) {
+                                    FirebaseFunctionsException.Code.NOT_FOUND -> "함수가 없어요. Firebase Functions를 배포해주세요. (firebase deploy --only functions)"
+                                    FirebaseFunctionsException.Code.UNAVAILABLE -> "서버를 사용할 수 없어요. 인터넷 연결을 확인해주세요."
+                                    FirebaseFunctionsException.Code.FAILED_PRECONDITION -> "Firebase Blaze 플랜이 필요해요."
+                                    else -> "전송 실패: ${e.message}"
+                                }
+                                else -> "전송에 실패했어요. 잠시 후 다시 시도해주세요."
+                            }
+                            Log.e("Cole", "버그신고 전송 실패", e)
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                            showBugReportSheet = false
+                        }
+                    }
+                },
+            )
+        }
+        // 이용약관 바텀시트
+        if (showTermsSheet) {
+            TermsPolicyBottomSheet(onDismiss = { showTermsSheet = false })
+        }
+        // 개인정보처리방침 바텀시트
+        if (showPrivacySheet) {
+            PrivacyPolicyBottomSheet(onDismiss = { showPrivacySheet = false })
         }
 
         // 구독 가이드 오버레이
@@ -1016,7 +1113,15 @@ fun MainFlowHost(
                 usageLabel = "",
                 onDismissRequest = { showPauseConfirmSheet = false },
                 onPauseClick = {
-                    PauseRepository(context).startPause(item.packageName, 5)
+                    val pauseRepo = PauseRepository(context)
+                    pauseRepo.startPause(item.packageName, 5)
+                    val pauseUntilMs = pauseRepo.getPauseUntilMs(item.packageName)
+                    PauseTimerNotificationService.start(
+                        context,
+                        item.packageName,
+                        item.appName,
+                        pauseUntilMs,
+                    )
                     showPauseConfirmSheet = false
                     showPauseCompleteSheet = true
                 },
@@ -1035,12 +1140,14 @@ fun MainFlowHost(
                 onDismissRequest = {
                     showPauseCompleteSheet = false
                     selectedAppForPause = null
+                    onPauseCompleteConsumed()
                 },
                 onLaunchAppClick = {
                     showPauseCompleteSheet = false
                     val launchIntent = context.packageManager.getLaunchIntentForPackage(item.packageName)
                     launchIntent?.let { context.startActivity(it) }
                     selectedAppForPause = null
+                    onPauseCompleteConsumed()
                 },
             )
         }

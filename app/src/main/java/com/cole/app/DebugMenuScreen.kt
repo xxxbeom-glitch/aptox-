@@ -1,5 +1,6 @@
 package com.cole.app
 
+import com.cole.app.subscription.SubscriptionManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,11 +25,13 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -41,9 +44,11 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -55,12 +60,20 @@ import androidx.compose.ui.unit.dp
 fun DebugFlowHost(
     onStartNormalFlow: () -> Unit,
     modifier: Modifier = Modifier,
+    pendingPauseCompleteFromOverlay: Pair<String, String>? = null,
 ) {
     var selectedScreen by remember { mutableStateOf<DebugScreen?>(null) }
     val menuScrollState = rememberScrollState()
 
+    LaunchedEffect(pendingPauseCompleteFromOverlay) {
+        if (pendingPauseCompleteFromOverlay != null) {
+            selectedScreen = DebugScreen.MainFlow
+        }
+    }
+
     var addAppReturnTo by remember { mutableStateOf<DebugScreen?>(null) } // MainFlow에서 진입 시 완료 후 돌아갈 화면
     if (selectedScreen != null) {
+        val activity = LocalContext.current as? MainActivity
         Box(modifier = modifier.fillMaxSize()) {
             DebugScreenPreview(
                 screen = selectedScreen!!,
@@ -73,6 +86,8 @@ fun DebugFlowHost(
                     selectedScreen = addAppReturnTo ?: null
                     addAppReturnTo = null
                 },
+                pendingPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay,
+                onPauseCompleteConsumed = { activity?.clearPendingPauseCompleteFromOverlay() },
             )
         }
     } else {
@@ -157,6 +172,8 @@ private fun DebugScreenPreview(
     onBack: () -> Unit,
     onNavigateToScreen: (DebugScreen) -> Unit = {},
     onAddAppComplete: () -> Unit = {},
+    pendingPauseCompleteFromOverlay: Pair<String, String>? = null,
+    onPauseCompleteConsumed: () -> Unit = {},
 ) {
     when (screen) {
         DebugScreen.Splash -> DebugSplashPreview(onBack = onBack)
@@ -271,6 +288,9 @@ private fun DebugScreenPreview(
         DebugScreen.MainFlow -> MainFlowHost(
             onAddAppClick = { onNavigateToScreen(DebugScreen.AddAppFlowHost) },
             onLogout = { onBack() },
+            isFreeUser = !SubscriptionManager.isSubscribed(LocalContext.current),
+            initialPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay,
+            onPauseCompleteConsumed = onPauseCompleteConsumed,
         )
         DebugScreen.MainMA01 -> DebugMainScreenWrapper(onBack = onBack) {
             MainScreenMA01(onAddAppClick = { })
@@ -1259,12 +1279,65 @@ private fun DebugIconsLabelContent() {
 }
 
 @Composable
+private fun DebugTestActionRow(
+    rowKey: String,
+    leftText: String,
+    actions: List<Pair<String, () -> Unit>>,
+    lastAction: Pair<String, String>?,
+    onAction: (String, String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(AppColors.Grey100)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = leftText,
+            style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            actions.forEach { (label, onClick) ->
+                val isActive = lastAction?.first == rowKey && lastAction?.second == label
+                Text(
+                    text = label,
+                    style = AppTypography.Caption1.copy(
+                        color = if (isActive) AppColors.Primary400 else AppColors.TextBody,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    ),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = LocalIndication.current,
+                            onClick = {
+                                onClick()
+                                onAction(rowKey, label)
+                            },
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DebugTestSettingsSection() {
-    var subscriptionState by remember { mutableIntStateOf(0) }
-    var blockedAppCount by remember { mutableIntStateOf(0) }
-    var usageTime by remember { mutableIntStateOf(0) }
-    var pause5min by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
+    var subscriptionOn by remember { mutableStateOf(SubscriptionManager.debugForceSubscribed) }
+    var restrictions by remember { mutableStateOf(AppRestrictionRepository(context).getAll()) }
+
+    fun refresh() { restrictions = AppRestrictionRepository(context).getAll() }
+
+    val dailyApps = restrictions.filter { it.blockUntilMs == 0L }
+    val timeApps = restrictions.filter { it.blockUntilMs > 0L }
 
     Column(
         modifier = Modifier
@@ -1278,96 +1351,118 @@ private fun DebugTestSettingsSection() {
             style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
         )
 
-        // 제한 앱 초기화
+        // 1. 제한앱 모두 삭제
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                text = "제한 앱 초기화",
+                text = "제한앱 모두 삭제",
                 style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
             )
             Text(
-                text = "현재 제한 중인 앱을 모두 삭제하고 모니터 서비스를 중지합니다.",
+                text = "제한 앱 목록을 초기화하고 모니터 서비스를 중지합니다.",
                 style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
             )
             ColePrimaryButton(
-                text = "제한 앱 모두 삭제 (0으로 초기화)",
+                text = "제한앱 모두 삭제",
                 onClick = {
                     AppRestrictionRepository(context).clearAll()
                     AppMonitorService.stop(context)
+                    refresh()
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
-        // 구독 상태
-        SettingItem(
-            title = "구독 상태",
-            options = listOf("무료", "구독중", "만료"),
-            selectedIndex = subscriptionState,
-            onSelect = { subscriptionState = it },
-        )
+        // 2. 구독 상태 온/오프
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "구독 상태 온/오프",
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = "DEBUG 빌드에서 유료 구독 상태를 강제로 설정합니다.",
+                style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (subscriptionOn) "구독중" else "무료",
+                    style = AppTypography.Caption1.copy(color = AppColors.TextBody),
+                )
+                ColeToggleSwitch(
+                    checked = subscriptionOn,
+                    onCheckedChange = {
+                        subscriptionOn = it
+                        SubscriptionManager.debugForceSubscribed = it
+                    },
+                )
+            }
+        }
 
-        // 차단 앱 개수
-        SettingItem(
-            title = "차단 앱 개수",
-            options = listOf("없음", "1개", "5개"),
-            selectedIndex = blockedAppCount,
-            onSelect = { blockedAppCount = it },
-        )
-
-        // 사용 시간
-        SettingItem(
-            title = "사용 시간",
-            options = listOf("0분", "30분", "초과"),
-            selectedIndex = usageTime,
-            onSelect = { usageTime = it },
-        )
-
-        // 5분 일시정지
-        SettingItem(
-            title = "5분 일시정지",
-            options = listOf("미사용", "사용완료"),
-            selectedIndex = pause5min,
-            onSelect = { pause5min = it },
-        )
-    }
-}
-
-@Composable
-private fun SettingItem(
-    title: String,
-    options: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = title,
-            style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            options.forEachIndexed { index, label ->
-                val isSelected = selectedIndex == index
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (isSelected) AppColors.Primary300
-                            else AppColors.Grey200
-                        )
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(index) }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        style = AppTypography.Caption1.copy(
-                            color = if (isSelected) AppColors.TextInvert else AppColors.TextBody,
+        // 3. 일일사용량 제한 테스트
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "일일사용량 제한 테스트",
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = "일일사용량 제한 앱의 오늘 사용량을 강제 설정합니다.",
+                style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
+            )
+            if (dailyApps.isEmpty()) {
+                Text(
+                    text = "등록된 일일사용량 제한 앱이 없습니다.",
+                    style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+                )
+            } else {
+                var lastDailyAction by remember { mutableStateOf<Pair<String, String>?>(null) }
+                dailyApps.forEach { app ->
+                    DebugTestActionRow(
+                        rowKey = app.packageName,
+                        leftText = "${app.appName} (${app.limitMinutes}분)",
+                        actions = listOf(
+                            "마감 3분 전" to { DebugTestSettings.debugTodayUsageMinutes = (app.limitMinutes - 3).toLong().coerceAtLeast(0) },
+                            "마감 1분 전" to { DebugTestSettings.debugTodayUsageMinutes = (app.limitMinutes - 1).toLong().coerceAtLeast(0) },
+                            "즉시 완료" to { DebugTestSettings.debugTodayUsageMinutes = app.limitMinutes.toLong() },
                         ),
-                        textAlign = TextAlign.Center,
+                        lastAction = lastDailyAction,
+                        onAction = { key, label -> lastDailyAction = key to label },
+                    )
+                }
+            }
+        }
+
+        // 4. 시간지정 제한 테스트
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "시간지정 제한 테스트",
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = "시간지정 제한 앱의 차단 종료 시각을 강제 변경합니다.",
+                style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
+            )
+            if (timeApps.isEmpty()) {
+                Text(
+                    text = "등록된 시간지정 제한 앱이 없습니다.",
+                    style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+                )
+            } else {
+                val repo = AppRestrictionRepository(context)
+                var lastTimeAction by remember { mutableStateOf<Pair<String, String>?>(null) }
+                timeApps.forEach { app ->
+                    DebugTestActionRow(
+                        rowKey = app.packageName,
+                        leftText = app.appName,
+                        actions = listOf(
+                            "해제 3분 전" to { repo.save(app.copy(blockUntilMs = System.currentTimeMillis() + 3 * 60_000L)); refresh() },
+                            "해제 1분 전" to { repo.save(app.copy(blockUntilMs = System.currentTimeMillis() + 1 * 60_000L)); refresh() },
+                            "즉시 완료" to { repo.save(app.copy(blockUntilMs = System.currentTimeMillis())); refresh() },
+                        ),
+                        lastAction = lastTimeAction,
+                        onAction = { key, label -> lastTimeAction = key to label },
                     )
                 }
             }

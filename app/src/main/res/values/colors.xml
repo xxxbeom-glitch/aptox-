@@ -8,4 +8,12 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="surface_background">#FFF5F5F5</color>
+
+    <!-- Figma AA-01 앱 차단 오버레이 -->
+    <color name="block_overlay_bg">#FF141414</color>
+    <color name="block_overlay_text_primary">#FFF5F5F5</color>
+    <color name="block_overlay_text_remaining">#FFE35959</color>
+    <color name="block_overlay_btn_bg">#FFF5F5F5</color>
+    <color name="block_overlay_btn_text">#FF1F1F1F</color>
+    <color name="block_overlay_btn_text_disabled">#FFC2C2C2</color>
 </resources>
