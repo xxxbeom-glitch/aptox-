@@ -105,19 +105,10 @@ sealed class DebugScreen(val category: String, val label: String) {
     // 인증/온보딩
     data object Splash : DebugScreen("인증/온보딩", "Splash")
     data object Login : DebugScreen("인증/온보딩", "Login")
-    data object SignUpEmail : DebugScreen("인증/온보딩", "회원가입 - 이메일")
-    data object SignUpPassword : DebugScreen("인증/온보딩", "회원가입 - 비밀번호")
-    data object SignUpNameBirthPhone : DebugScreen("인증/온보딩", "회원가입 - 이름/생년월일/휴대전화")
-    data object SignUpVerification : DebugScreen("인증/온보딩", "회원가입 - 인증코드")
-    data object SignUpComplete : DebugScreen("인증/온보딩", "회원가입 완료")
     data object Onboarding : DebugScreen("인증/온보딩", "온보딩")
     data object SelfTest : DebugScreen("인증/온보딩", "자가테스트")
     data object SelfTestLoading : DebugScreen("인증/온보딩", "자가테스트 로딩")
     data object SelfTestResult : DebugScreen("인증/온보딩", "자가테스트 결과")
-    data object PasswordResetEmail : DebugScreen("인증/온보딩", "비밀번호 재설정 - RS-01")
-    data object PasswordResetCode : DebugScreen("인증/온보딩", "비밀번호 재설정 - RS-02")
-    data object PasswordResetNew : DebugScreen("인증/온보딩", "비밀번호 재설정 - RS-03")
-
     // 앱 제한
     data object AddAppAA01 : DebugScreen("앱 제한", "AA-01: 제한 방법 선택")
     data object AddAppAppSelect : DebugScreen("앱 제한", "앱 선택")
@@ -131,8 +122,6 @@ sealed class DebugScreen(val category: String, val label: String) {
 
     // 메인
     data object MainFlow : DebugScreen("메인", "메인 (홈/챌린지/통계/설정)")
-    data object MainMA01 : DebugScreen("메인", "MA-01: 메인 (데이터 있음)")
-    data object MainMA02 : DebugScreen("메인", "MA-02: 메인 (데이터 없음)")
 
     // 테스트
     data object SpacingTest : DebugScreen("테스트", "간격테스트 (헤더~콘텐츠 38/36/32/28/26dp)")
@@ -178,27 +167,6 @@ private fun DebugScreenPreview(
     when (screen) {
         DebugScreen.Splash -> DebugSplashPreview(onBack = onBack)
         DebugScreen.Login -> DebugLoginPreview(onBack = onBack)
-        DebugScreen.SignUpEmail -> SignUpEmailScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
-        )
-        DebugScreen.SignUpPassword -> SignUpPasswordScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
-        )
-        DebugScreen.SignUpNameBirthPhone -> SignUpNameBirthPhoneScreen(
-            onNextClick = { _, _, _ -> onBack() },
-            onBackClick = onBack,
-        )
-        DebugScreen.SignUpVerification -> SignUpVerificationCodeScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
-            onResendClick = {},
-        )
-        DebugScreen.SignUpComplete -> SignUpCompleteScreen(
-            onStartClick = onBack,
-            onBackClick = onBack,
-        )
         DebugScreen.Onboarding -> OnboardingScreen(
             onSkipClick = onBack,
             onStartClick = onBack,
@@ -214,19 +182,6 @@ private fun DebugScreenPreview(
             onBackClick = onBack,
             rawScore = 23,
             userName = "장원영",
-        )
-        DebugScreen.PasswordResetEmail -> PasswordResetPhoneScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
-        )
-        DebugScreen.PasswordResetCode -> PasswordResetCodeScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
-            onResendClick = {},
-        )
-        DebugScreen.PasswordResetNew -> PasswordResetNewPasswordScreen(
-            onNextClick = { onBack() },
-            onBackClick = onBack,
         )
         DebugScreen.AddAppAA01 -> AddAppScreenAA01(
             onTimeSpecifiedClick = onBack,
@@ -292,12 +247,6 @@ private fun DebugScreenPreview(
             initialPauseCompleteFromOverlay = pendingPauseCompleteFromOverlay,
             onPauseCompleteConsumed = onPauseCompleteConsumed,
         )
-        DebugScreen.MainMA01 -> DebugMainScreenWrapper(onBack = onBack) {
-            MainScreenMA01(onAddAppClick = { })
-        }
-        DebugScreen.MainMA02 -> DebugMainScreenWrapper(onBack = onBack) {
-            MainScreenMA02(onAddAppClick = { })
-        }
         DebugScreen.SpacingTest -> DebugSpacingTestScreen(onBack = onBack)
         DebugScreen.GaugeTest -> DebugGaugeTestScreen(onBack = onBack)
         DebugScreen.GaugeTest2 -> DebugGaugeTest2Screen(onBack = onBack)
@@ -448,35 +397,6 @@ private fun DebugSplashPreview(onBack: () -> Unit) {
                 .align(Alignment.TopStart)
                 .padding(16.dp)
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .widthIn(max = 120.dp),
-        )
-    }
-}
-
-@Composable
-private fun DebugMainScreenWrapper(
-    onBack: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppColors.SurfaceBackgroundBackground)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars),
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            ColeHeaderHome(logo = painterResource(R.drawable.ic_logo), hasNotification = true)
-            Box(modifier = Modifier.weight(1f)) {
-                content()
-            }
-        }
-        ColeGhostButton(
-            text = "돌아가기",
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
                 .widthIn(max = 120.dp),
         )
     }
@@ -769,22 +689,12 @@ private fun DebugScreenListSection(
             DebugScreen.SelfTestResultST10,
             DebugScreen.LoadingAnimation,
             DebugScreen.AppIconTest,
-            DebugScreen.SignUpEmail,
-            DebugScreen.SignUpPassword,
-            DebugScreen.SignUpNameBirthPhone,
-            DebugScreen.SignUpVerification,
-            DebugScreen.SignUpComplete,
             DebugScreen.Onboarding,
             DebugScreen.SelfTest,
             DebugScreen.SelfTestLoading,
             DebugScreen.SelfTestResult,
-            DebugScreen.PasswordResetEmail,
-            DebugScreen.PasswordResetCode,
-            DebugScreen.PasswordResetNew,
             DebugScreen.AddAppFlowHost,
             DebugScreen.MainFlow,
-            DebugScreen.MainMA01,
-            DebugScreen.MainMA02,
             DebugScreen.Permission,
             DebugScreen.UsageStatsTest,
             DebugScreen.AppMonitorTest,
@@ -830,6 +740,8 @@ private sealed class DesignSystemSection(val label: String) {
     data object IconsLabel : DesignSystemSection("아이콘/라벨")
     data object BottomSheets : DesignSystemSection("바텀시트")
     data object Dialogs : DesignSystemSection("다이얼로그")
+    data object MedalAnimation : DesignSystemSection("메달 애니메이션 테스트")
+    data object AiAppCategoryClassification : DesignSystemSection("AI 앱 카테고리 분류 테스트")
 }
 
 @Composable
@@ -865,6 +777,8 @@ private fun DebugDesignSystemSection() {
                 DesignSystemSection.IconsLabel,
                 DesignSystemSection.BottomSheets,
                 DesignSystemSection.Dialogs,
+                DesignSystemSection.MedalAnimation,
+                DesignSystemSection.AiAppCategoryClassification,
             ).forEach { section ->
                 Box(
                     modifier = Modifier
@@ -909,6 +823,8 @@ private fun DebugDesignSystemDetailSection(
             DesignSystemSection.IconsLabel -> DebugIconsLabelContent()
             DesignSystemSection.BottomSheets -> DebugBottomSheetsContent(onBack = onBack)
             DesignSystemSection.Dialogs -> DebugDialogsContent()
+            DesignSystemSection.MedalAnimation -> MedalAnimationTestScreen(onBack = onBack)
+            DesignSystemSection.AiAppCategoryClassification -> AiAppCategoryClassificationScreen(onBack = onBack)
         }
     }
 }
@@ -1332,6 +1248,7 @@ private fun DebugTestActionRow(
 private fun DebugTestSettingsSection() {
     val context = LocalContext.current
     var subscriptionOn by remember { mutableStateOf(SubscriptionManager.debugForceSubscribed) }
+    var notificationCount by remember { mutableIntStateOf(DebugTestSettings.debugNotificationHistoryCount ?: 0) }
     var restrictions by remember { mutableStateOf(AppRestrictionRepository(context).getAll()) }
 
     fun refresh() { restrictions = AppRestrictionRepository(context).getAll() }
@@ -1434,7 +1351,53 @@ private fun DebugTestSettingsSection() {
             }
         }
 
-        // 4. 시간지정 제한 테스트
+        // 4. 알림내역 갯수 테스트
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "알림내역 갯수",
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+            )
+            Text(
+                text = "알림내역 화면에 표시할 테스트 아이템 수를 선택합니다.",
+                style = AppTypography.Caption1.copy(color = AppColors.TextSecondary),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(0, 3, 5, 10).forEach { count ->
+                    val isSelected = notificationCount == count
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isSelected) AppColors.Primary300
+                                else AppColors.Grey200
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                notificationCount = count
+                                DebugTestSettings.debugNotificationHistoryCount = count
+                            }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            text = "${count}개",
+                            style = AppTypography.Caption1.copy(
+                                color = if (isSelected) AppColors.TextInvert else AppColors.TextBody,
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. 시간지정 제한 테스트
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = "시간지정 제한 테스트",

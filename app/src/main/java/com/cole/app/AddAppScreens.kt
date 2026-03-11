@@ -44,14 +44,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
-import android.widget.ImageView
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -265,6 +264,9 @@ fun AddAppScreenAA02A01(
 
 private const val MAX_APP_SELECTION = 1
 
+/** 앱 선택 바텀시트에서 표시할 카테고리 (OTT, SNS, 게임, 쇼핑, 웹툰, 주식&코인만. 기타 제외) */
+private val APP_SELECT_ALLOWED_CATEGORIES = setOf("OTT", "SNS", "게임", "쇼핑", "웹툰", "주식,코인", "주식·코인", "주식&코인")
+
 /** 앱 선택 아이템 (name: 표시명, packageName: 아이콘 로드용, null이면 placeholder) */
 private data class AppSelectItem(val name: String, val packageName: String?)
 
@@ -291,6 +293,7 @@ fun AddAppSelectBottomSheet(
     var searchQuery by remember { mutableStateOf("") }
     var appList by remember { mutableStateOf<List<AppSelectItem>>(emptyList()) }
     var isLoadingApps by remember { mutableStateOf(true) }
+    var categoryMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     // 이미 제한 중 + 다른 방식에서 선택된 패키지
     val restrictedPackages = remember(additionalRestrictedPackages) {
@@ -298,18 +301,29 @@ fun AddAppSelectBottomSheet(
     }
 
     val selfPackageName = context.packageName
+    val cacheRepo = remember { AppCategoryCacheRepository(context) }
     LaunchedEffect(Unit) {
         val items = withContext(Dispatchers.Default) {
-            @Suppress("DEPRECATION")
             runCatching {
                 val pm = context.packageManager
                 val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                pm.queryIntentActivities(intent, 0)
+                val resolves = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+                }
+                resolves
                     .mapNotNull { ri ->
                         runCatching {
                             val pkg = ri.activityInfo.packageName
-                            if (pkg == selfPackageName) return@mapNotNull null // 이 앱(콜) 목록에서 숨김
-                            val appInfo = pm.getApplicationInfo(pkg, 0)
+                            if (pkg == selfPackageName) return@mapNotNull null
+                            val appInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                pm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0L))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                pm.getApplicationInfo(pkg, 0)
+                            }
                             val label = (pm.getApplicationLabel(appInfo) as? String)?.takeIf { it.isNotBlank() }
                             label?.let { AppSelectItem(it, pkg) }
                         }.getOrNull()
@@ -323,9 +337,38 @@ fun AddAppSelectBottomSheet(
         isLoadingApps = false
     }
 
-    val filteredApps = remember(searchQuery, appList) {
-        if (searchQuery.isBlank()) appList
+    // 앱 목록 로드 완료 후: 캐시 조회 → 캐시 미스만 classifyApps 호출 → 결과 저장
+    LaunchedEffect(appList) {
+        if (appList.isEmpty()) return@LaunchedEffect
+        val installedPkgs = appList.mapNotNull { it.packageName }.toSet()
+        val cached = withContext(Dispatchers.IO) {
+            cacheRepo.pruneUninstalled(installedPkgs)
+            cacheRepo.getCache()
+        }
+        categoryMap = cached
+        val withPkg = appList.mapNotNull { it.packageName?.let { pkg -> pkg to it.name } }
+        val needClassify = withPkg.filter { (pkg, _) -> pkg !in cached }
+        if (needClassify.isEmpty()) return@LaunchedEffect
+        val repo = ClaudeRepository()
+        val batchSize = 25
+        for (batch in needClassify.chunked(batchSize)) {
+            val results = withContext(Dispatchers.IO) {
+                repo.classifyApps(batch).getOrNull()
+            } ?: continue
+            val newEntries = results.associate { it.packageName to it.category }
+            withContext(Dispatchers.IO) { cacheRepo.saveCategories(newEntries) }
+            categoryMap = categoryMap + newEntries
+        }
+    }
+
+    val filteredApps = remember(searchQuery, appList, categoryMap) {
+        val bySearch = if (searchQuery.isBlank()) appList
         else appList.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        bySearch.filter { item ->
+            val pkg = item.packageName ?: return@filter false
+            val cat = categoryMap[pkg] ?: return@filter false
+            cat in APP_SELECT_ALLOWED_CATEGORIES
+        }
     }
 
     fun tryToggleApp(appName: String) {
@@ -403,28 +446,24 @@ fun AddAppSelectBottomSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (item.packageName != null) {
-                                    AndroidView(
-                                        factory = { ctx ->
-                                            ImageView(ctx).apply {
-                                                setImageDrawable(ctx.packageManager.getApplicationIcon(item.packageName))
-                                                scaleType = ImageView.ScaleType.FIT_CENTER
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .clip(RoundedCornerShape(6.dp)),
-                                    )
-                                } else {
+                            if (item.packageName != null) {
+                                AppIconBox(
+                                    appIcon = rememberAppIconPainter(item.packageName),
+                                    size = 56.dp,
+                                    force6dpClip = true,
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AppColors.TextDisabled),
+                                    contentAlignment = Alignment.Center,
+                                ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_app_placeholder),
                                         contentDescription = null,
@@ -433,10 +472,23 @@ fun AddAppSelectBottomSheet(
                                     )
                                 }
                             }
-                            Text(
-                                text = appName,
-                                style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
-                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                                horizontalAlignment = Alignment.Start,
+                            ) {
+                                item.packageName?.let { pkg ->
+                                    categoryMap[pkg]?.let { cat ->
+                                        CategoryTag(tag = cat)
+                                    }
+                                }
+                                Text(
+                                    text = appName,
+                                    style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                         ColeCheckBox(
                             checked = appName in selected,
@@ -749,8 +801,8 @@ private val DAILY_TIME_STEPS = listOf("30분", "60분", "90분", "120분", "150�
 private val DAILY_DAY_LABELS = listOf("월", "화", "수", "목", "금", "토", "일")
 private val DAILY_DURATION_OPTIONS = listOf("오늘 하루만", "1주", "2주", "3주", "4주")
 
-/** Figma 997-3736: 앱의 종류 선택 옵션 — 통계(StatisticsData) 카테고리 라벨과 일치 (기타는 추후 추가 예정) */
-private val APP_CATEGORY_OPTIONS = listOf("게임", "SNS", "쇼핑", "웹툰", "주식,코인", "OTT")
+/** Figma 997-3736 / 1044: 앱의 종류 선택 옵션 — 통계(StatisticsData) 카테고리 라벨과 일치 */
+private val APP_CATEGORY_OPTIONS = listOf("게임", "SNS", "쇼핑", "웹툰", "주식,코인", "OTT", "기타")
 private val DAILY_DURATION_OPTIONS_FOR_REPEAT = listOf("1주", "2주", "3주", "4주") // AA-02B-05: 반복 ON일 때만 사용
 
 private fun formatSelectedDays(selectedDays: Set<Int>, labels: List<String>): String =

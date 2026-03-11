@@ -2,29 +2,48 @@ package com.cole.app
 
 import com.cole.app.model.BadgeDefinition
 import com.cole.app.model.BadgeMasterData
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,7 +70,8 @@ fun ChallengeScreen(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .background(AppColors.SurfaceBackgroundBackground),
+            .background(AppColors.SurfaceBackgroundBackground)
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -121,10 +141,12 @@ fun ChallengeScreen(modifier: Modifier = Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     rowItems.forEach { item ->
-                        BadgeGridItem(
-                            modifier = Modifier.weight(1f),
-                            item = item,
-                        )
+                        key(item.badge.id) {
+                            BadgeGridItem(
+                                modifier = Modifier.weight(1f),
+                                item = item,
+                            )
+                        }
                     }
                     repeat(3 - rowItems.size) {
                         Spacer(modifier = Modifier.weight(1f))
@@ -132,7 +154,7 @@ fun ChallengeScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
@@ -152,10 +174,86 @@ private val challengeBadgeItems: List<ChallengeBadgeItem> = BadgeMasterData.badg
 }
 
 @Composable
+private fun AnimatedEarnedBadgeMedal(
+    iconResId: Int,
+    trigger: Int = 0,
+) {
+    val size = BadgeIconSize
+    val scaleAnim = remember { Animatable(1f) }
+    val rotationAnim = remember { Animatable(0f) }
+    val sparkleProgress = remember { Animatable(0f) }
+
+    LaunchedEffect(trigger) {
+        if (trigger == 0) return@LaunchedEffect
+        scaleAnim.snapTo(1f)
+        rotationAnim.snapTo(0f)
+        sparkleProgress.snapTo(0f)
+        scaleAnim.animateTo(
+            targetValue = 1.2f,
+            animationSpec = tween(250, easing = FastOutSlowInEasing),
+        )
+        rotationAnim.animateTo(
+            targetValue = 720f,
+            animationSpec = tween(500, easing = FastOutSlowInEasing),
+        )
+        scaleAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(150, easing = FastOutSlowInEasing),
+        )
+        sparkleProgress.snapTo(0f)
+        sparkleProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(250, easing = FastOutSlowInEasing),
+        )
+        sparkleProgress.snapTo(0f)
+    }
+
+    val density = LocalDensity.current.density
+    Box(
+        modifier = Modifier
+            .size(size)
+            .graphicsLayer {
+                scaleX = scaleAnim.value
+                scaleY = scaleAnim.value
+                rotationY = rotationAnim.value
+                transformOrigin = TransformOrigin.Center
+                cameraDistance = (8f * density).coerceAtLeast(1f)
+            },
+    ) {
+        Image(
+            painter = painterResource(iconResId),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit,
+        )
+        if (sparkleProgress.value in 0.01f..0.99f) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = this.size.width
+                val stripW = w * 0.35f
+                val sweepX = sparkleProgress.value * 1.4f - 0.2f
+                val left = (sweepX * w).coerceIn(-stripW, w)
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.8f),
+                            Color.Transparent,
+                        ),
+                        startX = left,
+                        endX = left + stripW,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BadgeGridItem(
     modifier: Modifier = Modifier,
     item: ChallengeBadgeItem,
 ) {
+    var tapTrigger by remember { mutableStateOf(0) }
     val textColor = if (item.earned) AppColors.TextBody else AppColors.TextDisabled
     val dateColor = if (item.earned) AppColors.TextCaption else AppColors.TextDisabled
     val bgResId = if (item.earned) R.drawable.bg_active else R.drawable.bg_disable
@@ -174,7 +272,14 @@ private fun BadgeGridItem(
             verticalArrangement = Arrangement.spacedBy(BadgeToTextGap),
         ) {
             Box(
-                modifier = Modifier.size(BadgeBackgroundSize),
+                modifier = Modifier
+                    .size(BadgeBackgroundSize)
+                    .then(
+                        if (item.earned) Modifier.clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ) { tapTrigger++ } else Modifier
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
@@ -183,12 +288,19 @@ private fun BadgeGridItem(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.FillBounds,
                 )
-                Image(
-                    painter = painterResource(item.badge.iconResId),
-                    contentDescription = null,
-                    modifier = Modifier.size(BadgeIconSize),
-                    contentScale = ContentScale.Fit,
-                )
+                if (item.earned) {
+                    AnimatedEarnedBadgeMedal(
+                        iconResId = item.badge.iconResId,
+                        trigger = tapTrigger,
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(R.drawable.ico_lock_challange),
+                        contentDescription = null,
+                        modifier = Modifier.size(BadgeIconSize),
+                        contentScale = ContentScale.Fit,
+                    )
+                }
             }
             Column(
                 modifier = Modifier.fillMaxWidth(),

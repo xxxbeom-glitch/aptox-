@@ -14,4 +14,7 @@ object DebugTestSettings {
 
     /** 주간 챌린지 달성 일수 강제 설정. null이면 기본값 사용 */
     var debugWeeklyChallengeDays: Int? = null
+
+    /** 알림내역 테스트용 갯수. null이면 0개 (빈 상태). 0, 3, 5, 10 중 선택 */
+    var debugNotificationHistoryCount: Int? = null
 }

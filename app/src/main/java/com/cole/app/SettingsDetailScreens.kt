@@ -245,6 +245,11 @@ fun SubscriptionManageScreen(
     }
 }
 
+/**
+ * 알림 설정 화면 (Figma 1068-4394, 1068-3998)
+ * - 기기 알림: 시스템 알림 허용 상태 + 설정 진입
+ * - 주간 리포트 / 사용시간 알림 / 목표 달성 알림: 토글
+ */
 @Composable
 fun NotificationSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -281,53 +286,60 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        SettingsListCard {
-            SettingsRowWithBadge(
-                iconResId = R.drawable.ic_manageaccount,
-                label = "기기 알림",
-                badgeText = if (deviceNotificationsEnabled) "허용됨" else "허용되지 않음",
-                badgeAllowed = deviceNotificationsEnabled,
-                subtitle = "알림을 받으려면 기기 알림 허용이 필요해요",
-                onClick = {
-                    if (!deviceNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        })
-                    }
-                },
-            )
-            SettingsDivider()
-            SettingsRowWithToggle(
-                label = "주간 리포트",
-                subtitle = "월요일마다, 지난 한 주 사용 현황을 알려드려요",
-                checked = weeklyReport,
-                onCheckedChange = { weeklyReport = it },
-            )
-            SettingsDivider()
-            SettingsRowWithToggle(
-                label = "사용시간 알림",
-                subtitle = "일일 한도 초과 전에 미리 알려드려요",
-                checked = usageTimeAlert,
-                onCheckedChange = { usageTimeAlert = it },
-            )
-            SettingsDivider()
-            SettingsRowWithToggle(
-                label = "목표 달성 알림",
-                subtitle = "챌린지 성공 시 바로 알려드려요",
-                checked = goalAchievedAlert,
-                onCheckedChange = { goalAchievedAlert = it },
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 80.dp),
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+            SettingsListCard {
+                SettingsRowWithBadge(
+                    iconResId = R.drawable.ic_notisetting,
+                    label = "기기 알림",
+                    badgeText = if (deviceNotificationsEnabled) "허용됨" else "허용되지 않음",
+                    badgeAllowed = deviceNotificationsEnabled,
+                    subtitle = "알림을 받으려면 기기 알림 허용이 필요해요",
+                    onClick = {
+                        if (!deviceNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            })
+                        }
+                    },
+                )
+                SettingsDivider()
+                SettingsRowWithToggle(
+                    label = "주간 리포트",
+                    subtitle = "월요일마다, 지난 한 주 사용 현황을 알려드려요",
+                    checked = weeklyReport,
+                    onCheckedChange = { weeklyReport = it },
+                )
+                SettingsDivider()
+                SettingsRowWithToggle(
+                    label = "사용시간 알림",
+                    subtitle = "일일 한도 초과 전에 미리 알려드려요",
+                    checked = usageTimeAlert,
+                    onCheckedChange = { usageTimeAlert = it },
+                )
+                SettingsDivider()
+                SettingsRowWithToggle(
+                    label = "목표 달성 알림",
+                    subtitle = "챌린지 성공 시 바로 알려드려요",
+                    checked = goalAchievedAlert,
+                    onCheckedChange = { goalAchievedAlert = it },
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

@@ -89,16 +89,14 @@ class UsageStatsSyncWorker(
     }
 
     private fun getUserInstalledPackages(pm: PackageManager): Set<String> {
-        val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA) ?: return emptySet()
-        return apps
-            .filter { info ->
-                val flags = info.flags
-                val isSystem = (flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdated = (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                !isSystem || isUpdated
-            }
-            .map { it.packageName }
-            .toSet()
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        val resolves = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        }
+        return resolves.map { it.activityInfo.packageName }.toSet()
     }
 
     private fun daysAgoToYyyyMmDd(daysAgo: Int): String {

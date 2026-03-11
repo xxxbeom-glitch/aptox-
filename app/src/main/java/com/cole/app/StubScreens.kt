@@ -91,6 +91,12 @@ fun computeSelfTestResultType(answers: Map<Int, Int>): SelfTestResultType {
     }
 }
 
+/** 홈 화면 제한 앱 영역 상태 (items + recommendedApp 동시 로드로 플래시 방지) */
+private data class HomeRestrictionState(
+    val items: List<MainAppRestrictionItem>,
+    val recommendedApp: StatisticsData.StatsAppItem?,
+)
+
 /** rawScore(8~32)를 SelfTestResultType으로 변환 */
 fun rawScoreToResultType(rawScore: Int): SelfTestResultType = when {
     rawScore <= 13 -> SelfTestResultType.HEALTH
@@ -482,30 +488,27 @@ internal fun MainScreenMA01(
 ) {
     val context = LocalContext.current
 
-    // 실제 제한 앱 목록 로드 (1초마다 갱신 - 사용시간 실시간 반영)
-    val restrictionItems by produceState<List<MainAppRestrictionItem>>(
-        initialValue = emptyList(),
+    // 제한 앱 목록 + 빈 상태일 때 추천앱을 함께 로드 (플래시 방지: 첫 로드 완료 후에만 UI 표시)
+    val state by produceState<HomeRestrictionState?>(
+        initialValue = null,
         context,
     ) {
         while (true) {
-            value = withContext(Dispatchers.Default) {
+            val items = withContext(Dispatchers.Default) {
                 loadRestrictionItems(context)
             }
+            val recommended = if (items.isEmpty()) {
+                withContext(Dispatchers.IO) {
+                    StatisticsData.loadRecommendedAppForRestriction(context)
+                }
+            } else null
+            value = HomeRestrictionState(items, recommended)
             delay(1000)
         }
     }
-
-    // 진행 중인 앱이 없을 때: 최근 1주일 기반 카테고리 1순위 앱 추천
-    val recommendedApp by produceState<StatisticsData.StatsAppItem?>(
-        initialValue = null,
-        restrictionItems,
-    ) {
-        value = if (restrictionItems.isEmpty()) {
-            withContext(Dispatchers.IO) {
-                StatisticsData.loadRecommendedAppForRestriction(context)
-            }
-        } else null
-    }
+    val restrictionItems = state?.items ?: emptyList()
+    val recommendedApp = state?.recommendedApp
+    val isRestrictionStateReady = state != null
 
     Column(
         modifier = modifier
@@ -521,14 +524,14 @@ internal fun MainScreenMA01(
             onClick = onStatisticsClick,
         )
 
-        if (restrictionItems.isEmpty()) {
+        if (isRestrictionStateReady && restrictionItems.isEmpty()) {
             MainAppRestrictionCardEmpty(
                 onAddAppClick = onAddAppClick,
                 addButtonText = if (recommendedApp != null) "사용제한 앱 추가" else "잠시만 멀어질 앱 추가하기",
                 recommendedApp = recommendedApp,
                 onRecommendedAppClick = null,
             )
-        } else {
+        } else if (restrictionItems.isNotEmpty()) {
             MainAppRestrictionCard(
                 apps = restrictionItems,
                 onAddAppClick = onAddAppClick,
@@ -694,6 +697,7 @@ fun MainFlowHost(
     var showBugReportSheet by remember { mutableStateOf(false) }
     var showTermsSheet by remember { mutableStateOf(false) }
     var showPrivacySheet by remember { mutableStateOf(false) }
+    var showNotificationOverlay by remember { mutableStateOf(false) }
     var showSubscriptionGuide by remember { mutableStateOf(false) }
     var showAppLimitInfoSheet by remember { mutableStateOf(false) }
     var selectedAppForDetail by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
@@ -742,19 +746,17 @@ fun MainFlowHost(
     // 시스템 네비바 영역 채움: 프리미엄 배너(#2B2B2B) / 유료(카드 배경)
     val bottomFillColor = if (isFreeUser) Color(0xFF2B2B2B) else AppColors.SurfaceBackgroundCard
 
-    // 설정 2depth: 하단 앱바 비노출
-    val isSettings2Depth = navIndex == 3 && settingsDetail != null
-    // 바텀바 하단 패딩 (설정 2depth일 땐 앱바 숨김 → 시스템 네비바만 적용)
+    // 바텀바 하단 패딩 (앱바 높이 또는 기본값)
     val contentBottomPadding = when {
-        isSettings2Depth -> navBarPaddingDp
         bottomBarHeightDp > 0.dp -> bottomBarHeightDp
         else -> 122.dp
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = AppColors.SurfaceBackgroundBackground,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = AppColors.SurfaceBackgroundBackground,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column(
                 modifier = Modifier
@@ -763,20 +765,26 @@ fun MainFlowHost(
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = 10.dp)
             ) {
+                val onNotificationClick: () -> Unit = {
+                    showNotificationOverlay = true
+                }
                 when {
                     navIndex == 0 -> ColeHeaderHome(
                         logo = painterResource(R.drawable.ic_logo),
                         hasNotification = true,
+                        onNotificationClick = onNotificationClick,
                     )
                     navIndex == 1 -> ColeHeaderTitleWithNotification(
                         title = "챌린지",
                         hasNotification = true,
                         modifier = Modifier.fillMaxWidth(),
+                        onNotificationClick = onNotificationClick,
                     )
                     navIndex == 2 -> ColeHeaderTitleWithNotification(
                         title = "통계",
                         hasNotification = true,
                         modifier = Modifier.fillMaxWidth(),
+                        onNotificationClick = onNotificationClick,
                     )
                     navIndex == 3 && settingsDetail != null -> ColeHeaderSub(
                         title = settingsDetail!!.title,
@@ -789,14 +797,17 @@ fun MainFlowHost(
                         },
                         showNotification = true,
                         modifier = Modifier.fillMaxWidth(),
+                        onNotificationClick = onNotificationClick,
                     )
                     navIndex == 3 -> ColeHeaderTitleWithNotification(
                         title = "설정",
                         hasNotification = true,
+                        onNotificationClick = onNotificationClick,
                     )
                     else -> ColeHeaderHome(
                         logo = painterResource(R.drawable.ic_logo),
                         hasNotification = true,
+                        onNotificationClick = onNotificationClick,
                     )
                 }
             }
@@ -917,9 +928,8 @@ fun MainFlowHost(
                         .background(bottomFillColor),
                 )
             }
-            // ── 바텀바 (설정 2depth 제외 시 표시) ──
-            if (!isSettings2Depth) {
-                Column(
+            // ── 바텀바 (항상 표시) ──
+            Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -941,63 +951,6 @@ fun MainFlowHost(
                         onPremiumClick = { if (isFreeUser) showSubscriptionGuide = true },
                     )
                 }
-            }
-        }
-
-        // 버그 신고 바텀시트
-        if (showBugReportSheet) {
-            val scope = rememberCoroutineScope()
-            BugReportBottomSheet(
-                onDismiss = { showBugReportSheet = false },
-                onSubmit = { content ->
-                    scope.launch {
-                        try {
-                            FirebaseFunctions.getInstance()
-                                .getHttpsCallable("submitBugReport")
-                                .call(hashMapOf("content" to content))
-                                .await()
-                            showBugReportSheet = false
-                            android.widget.Toast.makeText(
-                                context,
-                                "버그 신고가 등록되었어요. 감사해요!",
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                        } catch (e: Exception) {
-                            val msg = when (e) {
-                                is FirebaseFunctionsException -> when (e.code) {
-                                    FirebaseFunctionsException.Code.NOT_FOUND -> "함수가 없어요. Firebase Functions를 배포해주세요. (firebase deploy --only functions)"
-                                    FirebaseFunctionsException.Code.UNAVAILABLE -> "서버를 사용할 수 없어요. 인터넷 연결을 확인해주세요."
-                                    FirebaseFunctionsException.Code.FAILED_PRECONDITION -> "Firebase Blaze 플랜이 필요해요."
-                                    else -> "전송 실패: ${e.message}"
-                                }
-                                else -> "전송에 실패했어요. 잠시 후 다시 시도해주세요."
-                            }
-                            Log.e("Cole", "버그신고 전송 실패", e)
-                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                            showBugReportSheet = false
-                        }
-                    }
-                },
-            )
-        }
-        // 이용약관 바텀시트
-        if (showTermsSheet) {
-            TermsPolicyBottomSheet(onDismiss = { showTermsSheet = false })
-        }
-        // 개인정보처리방침 바텀시트
-        if (showPrivacySheet) {
-            PrivacyPolicyBottomSheet(onDismiss = { showPrivacySheet = false })
-        }
-
-        // 구독 가이드 오버레이
-        if (showSubscriptionGuide) {
-            SubscriptionGuideScreen(
-                onClose = { showSubscriptionGuide = false },
-                onSubscribeClick = { isAnnual ->
-                    showSubscriptionGuide = false
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
         }
 
         // 진행중인 앱 상세 바텀시트
@@ -1151,5 +1104,78 @@ fun MainFlowHost(
                 },
             )
         }
+    }
+
+    // 알림내역 페이지 오버레이 (헤더 알림 아이콘 탭 시)
+    if (showNotificationOverlay) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(AppColors.SurfaceBackgroundBackground),
+        ) {
+            NotificationHistoryScreen(
+                items = sampleNotificationHistoryItems(
+                    DebugTestSettings.debugNotificationHistoryCount ?: 0
+                ),
+                onBack = { showNotificationOverlay = false },
+                onNotificationSettingsClick = null,
+            )
+        }
+    }
+    // 버그 신고 바텀시트
+    if (showBugReportSheet) {
+        val scope = rememberCoroutineScope()
+        BugReportBottomSheet(
+            onDismiss = { showBugReportSheet = false },
+            onSubmit = { content ->
+                scope.launch {
+                    try {
+                        FirebaseFunctions.getInstance()
+                            .getHttpsCallable("submitBugReport")
+                            .call(hashMapOf("content" to content))
+                            .await()
+                        showBugReportSheet = false
+                        android.widget.Toast.makeText(
+                            context,
+                            "버그 신고가 등록되었어요. 감사해요!",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    } catch (e: Exception) {
+                        val msg = when (e) {
+                            is FirebaseFunctionsException -> when (e.code) {
+                                FirebaseFunctionsException.Code.NOT_FOUND -> "함수가 없어요. Firebase Functions를 배포해주세요. (firebase deploy --only functions)"
+                                FirebaseFunctionsException.Code.UNAVAILABLE -> "서버를 사용할 수 없어요. 인터넷 연결을 확인해주세요."
+                                FirebaseFunctionsException.Code.FAILED_PRECONDITION -> "Firebase Blaze 플랜이 필요해요."
+                                else -> "전송 실패: ${e.message}"
+                            }
+                            else -> "전송에 실패했어요. 잠시 후 다시 시도해주세요."
+                        }
+                        Log.e("Cole", "버그신고 전송 실패", e)
+                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                        showBugReportSheet = false
+                    }
+                }
+            },
+        )
+    }
+    // 이용약관 바텀시트
+    if (showTermsSheet) {
+        TermsPolicyBottomSheet(onDismiss = { showTermsSheet = false })
+    }
+    // 개인정보처리방침 바텀시트
+    if (showPrivacySheet) {
+        PrivacyPolicyBottomSheet(onDismiss = { showPrivacySheet = false })
+    }
+
+    // 구독 가이드 오버레이
+    if (showSubscriptionGuide) {
+        SubscriptionGuideScreen(
+            onClose = { showSubscriptionGuide = false },
+            onSubscribeClick = { isAnnual ->
+                showSubscriptionGuide = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
     }
 }

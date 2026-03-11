@@ -20,3 +20,4 @@ color_va.json
 
 # Firebase Functions
 functions/node_modules
+functions/*-adminsdk-*.json

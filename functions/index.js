@@ -3,6 +3,7 @@ const admin = require("firebase-admin");
 const https = require("https");
 const nodemailer = require("nodemailer");
 const { SolapiMessageService } = require("solapi");
+const Anthropic = require("@anthropic-ai/sdk").default;
 
 admin.initializeApp();
 
@@ -473,6 +474,124 @@ function getKakaoUserInfo(accessToken) {
     req.end();
   });
 }
+
+/**
+ * 앱 목록 AI 카테고리 분류 - 앱에서 classifyApps({ apps: [{ package, appName }] }) 로 호출
+ * API 키: firebase functions:config:set anthropic.key="sk-ant-api03-..."
+ * 응답: { results: [{ package, appName, category }] } — category는 SNS/게임/OTT/쇼핑/웹툰/주식·코인/기타 중 하나
+ */
+exports.classifyApps = functions.https.onCall(async (data, context) => {
+  const apps = data?.apps;
+  if (!Array.isArray(apps) || apps.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "apps 배열이 필요합니다.");
+  }
+
+  const config = functions.config().anthropic || {};
+  const apiKey = config.api_key || config.key || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Anthropic API 키가 설정되지 않았습니다. firebase functions:config:set anthropic.api_key=sk-ant-api03-..."
+    );
+  }
+
+  const categories = "SNS, 게임, OTT, 쇼핑, 웹툰, 주식·코인, 기타";
+  const appListStr = apps
+    .map((a) => `- ${a.package || "(없음)"} | ${a.appName || "(없음)"}`)
+    .join("\n");
+
+  const prompt = `다음 앱 목록을 아래 7개 카테고리 중 정확히 하나씩 분류해주세요. 카테고리: ${categories}
+
+앱 목록:
+${appListStr}
+
+반드시 JSON 배열만 출력하세요. 다른 설명 없이. 형식:
+[{"package":"패키지명","appName":"앱이름","category":"카테고리"}]
+각 category는 반드시 ${categories} 중 정확히 하나만 사용.`;
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const textContent = response.content.find((c) => c.type === "text");
+    const rawText = textContent ? textContent.text.trim() : "";
+
+    // JSON 블록 추출 (```json ... ``` 또는 그냥 [...])
+    let jsonStr = rawText;
+    const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+    const arr = JSON.parse(jsonStr);
+    if (!Array.isArray(arr)) throw new Error("응답이 배열이 아닙니다.");
+
+    const results = arr.map((item) => ({
+      package: String(item.package || ""),
+      appName: String(item.appName || ""),
+      category: String(item.category || "기타").trim(),
+    }));
+    return { results };
+  } catch (e) {
+    const errMsg = e?.message || String(e);
+    console.error("classifyApps error:", errMsg);
+    if (errMsg.includes("invalid_api_key") || errMsg.includes("401")) {
+      throw new functions.https.HttpsError("failed-precondition", "Claude API 키가 유효하지 않습니다.");
+    }
+    if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+      throw new functions.https.HttpsError("resource-exhausted", "요청이 너무 많아요. 잠시 후 다시 시도해주세요.");
+    }
+    throw new functions.https.HttpsError("internal", "앱 분류에 실패했어요. " + errMsg.substring(0, 80));
+  }
+});
+
+/**
+ * Claude API 호출 - 앱에서 callClaude({ prompt: "..." }) 로 호출
+ * API 키 설정: firebase functions:config:set anthropic.api_key="sk-ant-api03-..."
+ */
+exports.callClaude = functions.https.onCall(async (data, context) => {
+  const prompt = data?.prompt;
+  if (!prompt || typeof prompt !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "prompt가 필요합니다.");
+  }
+
+  const config = functions.config().anthropic || {};
+  const apiKey = config.api_key || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Anthropic API 키가 설정되지 않았습니다. firebase functions:config:set anthropic.api_key=sk-ant-api03-..."
+    );
+  }
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt.trim() }],
+    });
+
+    const textContent = response.content.find((c) => c.type === "text");
+    const reply = textContent ? textContent.text : "";
+
+    return { reply, usage: response.usage };
+  } catch (e) {
+    const errMsg = e?.message || String(e);
+    console.error("callClaude error:", errMsg);
+    if (errMsg.includes("invalid_api_key") || errMsg.includes("401")) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Claude API 키가 유효하지 않습니다. console.anthropic.com에서 확인해주세요."
+      );
+    }
+    if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+      throw new functions.https.HttpsError("resource-exhausted", "요청이 너무 많아요. 잠시 후 다시 시도해주세요.");
+    }
+    throw new functions.https.HttpsError("internal", "Claude 응답 생성에 실패했어요. " + errMsg.substring(0, 80));
+  }
+});
 
 /**
  * 버그 신고 제출 - Firestore 저장 + psblove88@gmail.com 으로 이메일 발송

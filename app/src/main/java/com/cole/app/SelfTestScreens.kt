@@ -92,7 +92,7 @@ fun SelfTestScreen(
         topBar = {
             ColeHeaderTitleWithNotification(
                 title = "스마트폰 중독 자가 테스트",
-                hasNotification = true,
+                showNotificationIcon = false,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
@@ -123,28 +123,32 @@ fun SelfTestScreen(
                 ColeSelfTestButtonGroup(
                     options = SelfTestOptions,
                     selectedIndex = selectedOption,
-                    onOptionSelected = { selectedOption = it },
+                    onOptionSelected = { idx ->
+                        if (isLastStep) {
+                            selectedOption = idx
+                        } else {
+                            answers[currentStep] = idx
+                            selectedOption = null
+                            currentStep++
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ColePrimaryButton(
-                    text = if (isLastStep) "테스트 결과 확인 하기" else "다음",
-                    onClick = { commitAndProceed() },
-                    enabled = selectedOption != null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                ColeGhostButton(
-                    text = "뒤로",
-                    onClick = onBackClick,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            if (isLastStep) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp, bottom = 24.dp),
+                ) {
+                    ColePrimaryButton(
+                        text = "테스트 결과 확인 하기",
+                        onClick = { commitAndProceed() },
+                        enabled = selectedOption != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }

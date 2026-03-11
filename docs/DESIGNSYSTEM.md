@@ -107,3 +107,28 @@ ColeListSwitch(
 ### ColeRadioButton
 - **용도:** 원형 라디오 (SelectionCard 외 단일 선택 UI)
 - **사양:** 28×28dp, 선택 시 내부 10dp 점
+
+---
+
+## SpeechBubble (말풍선)
+
+**Figma:** 1084-4659
+
+- **구성:** 좌측 꼬리(13×10dp) + 본문 박스
+- **본문 박스**
+  - 배경: Primary200 `#E9EBF8`
+  - 패딩: 5dp horizontal, 3dp vertical
+  - 모서리: 2dp
+- **텍스트:** Caption1 (12sp), Primary300 `#6C54DD`
+- **꼬리:** 좌측 또는 우측 방향 삼각형
+
+### API
+```kotlin
+SpeechBubble(
+    text: String,
+    modifier: Modifier = Modifier,
+    tailDirection: TailDirection = TailDirection.Start,
+)
+
+enum class TailDirection { Start, End }
+```

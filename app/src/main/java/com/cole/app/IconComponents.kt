@@ -338,25 +338,29 @@ fun RestrictedAppIconBox(
 /**
  * 앱 아이콘 — 기기 AdaptiveIcon 마스크(스쿼클) + border
  * 통계 등 자물쇠 없이 아이콘만 표시할 때 사용. 홈 화면과 동일한 쉐이프
+ * @param force6dpClip true면 6dp 라운드 사각형으로 강제 클리핑 (Figma 가이드. 기기별 차이 제거)
  */
 @Composable
 fun AppIconBox(
     appIcon: Painter,
     modifier: Modifier = Modifier,
     size: Dp = 56.dp,
+    force6dpClip: Boolean = false,
 ) {
-    val maskShape = rememberDeviceIconMaskShape()
+    val maskShape = if (force6dpClip) AppIconShape else rememberDeviceIconMaskShape()
     Box(
         modifier = modifier
             .size(size)
             .clip(maskShape)
-            .border(AppIconBorderWidth, AppIconBorderColor, maskShape),
+            .then(if (!force6dpClip) Modifier.border(AppIconBorderWidth, AppIconBorderColor, maskShape) else Modifier),
     ) {
         Icon(
             painter = appIcon,
             contentDescription = null,
             tint = Color.Unspecified,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (force6dpClip) Modifier.clip(AppIconShape) else Modifier),
         )
     }
 }

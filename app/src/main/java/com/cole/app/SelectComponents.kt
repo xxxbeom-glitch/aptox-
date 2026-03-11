@@ -309,7 +309,7 @@ fun ColeSelectionCardGroup(items: List<SelectionCardItem>, selectedIndex: Int, o
     }
 }
 
-// Figma Select/Self Test: Default(414:7249) 흰배경/TextBody, Select(414:7257) Primary배경/TextInvert
+// Figma Select/Self Test: Default(414:7249) 흰배경/TextBody/테두리, Select(414:7257) Primary배경/TextInvert
 @Composable
 fun ColeSelfTestButton(
     text: String,
@@ -317,15 +317,20 @@ fun ColeSelfTestButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(
                 if (selected) AppColors.ButtonPrimaryBgDefault
                 else AppColors.ButtonSecondaryBgDefault
             )
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .then(
+                if (selected) Modifier
+                else Modifier.border(0.6.dp, AppColors.ButtonSecondaryBorderDefault, shape)
+            )
+            .clickable(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center,
     ) {

@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,7 +46,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -53,9 +58,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -77,6 +84,53 @@ private enum class StatsHelpType(val title: String, val body: String) {
 
 /** 통계 카드 공통 패딩(모든 카드 동일) */
 private val StatsCardPadding = 16.dp
+
+/** 앱 사용 정보 접근 권한 미허용 시 안내 화면 */
+@Composable
+private fun StatsUsageAccessGuard(
+    modifier: Modifier = Modifier,
+    onGranted: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_disclaimer_info),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "앱 사용 정보 접근 권한이 필요해요",
+                style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "통계를 보려면 기기 설정에서\n'앱 사용 정보 접근 허용'을 켜주세요.",
+                style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ColePrimaryButton(
+                text = "권한 설정하러 가기",
+                onClick = {
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
 /** 통계 카드 내부 섹션 간 간격 (제목-차트-리스트 등) */
 private val StatsCardContentSpacing = 16.dp
 /** 카드 내 리스트 항목 간 간격 */
@@ -96,8 +150,22 @@ fun StatisticsScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        if (StatisticsData.hasUsageAccess(context)) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var hasUsageAccess by remember { mutableStateOf(StatisticsData.hasUsageAccess(context)) }
+
+    // 설정 화면에서 돌아올 때 권한 상태 재확인
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                hasUsageAccess = StatisticsData.hasUsageAccess(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(hasUsageAccess) {
+        if (hasUsageAccess) {
             androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
                 "usage_stats_initial_sync",
                 androidx.work.ExistingWorkPolicy.KEEP,
@@ -107,6 +175,15 @@ fun StatisticsScreen(
             )
         }
     }
+
+    if (!hasUsageAccess) {
+        StatsUsageAccessGuard(
+            modifier = modifier,
+            onGranted = { hasUsageAccess = StatisticsData.hasUsageAccess(context) },
+        )
+        return
+    }
+
     var selectedTab by remember { mutableIntStateOf(0) } // 기본 주간
     val tabLabels = listOf("주간", "월간", "연간")
     val tabEnum = when (selectedTab) {
@@ -115,8 +192,9 @@ fun StatisticsScreen(
         else -> StatisticsData.Tab.YEARLY
     }
 
-    // 카드별 독립적인 주/연도 네비게이션
+    // 카드별 독립적인 주/연도/월 네비게이션
     var weekOffsetDateChart by remember { mutableIntStateOf(0) }
+    var monthOffsetDateChart by remember { mutableIntStateOf(0) } // 월간: 0=이번 달
     var yearOffsetDateChart by remember { mutableIntStateOf(0) }
     var weekOffsetCategory by remember { mutableIntStateOf(0) }
     var monthOffsetCategory by remember { mutableIntStateOf(0) } // 월간: 0=이번 달
@@ -124,7 +202,8 @@ fun StatisticsScreen(
     var weekOffsetRestriction by remember { mutableIntStateOf(0) }
     var monthOffsetRestriction by remember { mutableIntStateOf(0) } // 월간: 0=이번 달
     var yearOffsetRestriction by remember { mutableIntStateOf(0) }
-    var weekOffsetComparison by remember { mutableIntStateOf(-1) } // 기본: 지난주 vs 이번주
+    var weekOffsetComparison by remember { mutableIntStateOf(-1) } // 기본: 지난주
+    var monthOffsetComparison by remember { mutableIntStateOf(0) }  // 0=이번 달
     var yearOffsetComparison by remember { mutableIntStateOf(0) }
 
     val restrictedApps = remember { AppRestrictionRepository(context).getAll() }
@@ -153,6 +232,8 @@ fun StatisticsScreen(
             tabEnum = tabEnum,
             weekOffset = weekOffsetDateChart,
             onWeekChange = { weekOffsetDateChart = it },
+            monthOffset = monthOffsetDateChart,
+            onMonthChange = { monthOffsetDateChart = it },
             yearOffset = yearOffsetDateChart,
             onYearChange = { yearOffsetDateChart = it },
             onInfoClick = { showHelpSheet = StatsHelpType.DATE_CHART },
@@ -181,10 +262,12 @@ fun StatisticsScreen(
             dailyLimitApps = dailyLimitApps,
             onInfoClick = { showHelpSheet = StatsHelpType.RESTRICTION },
         )
-        StatsGroupedBarSection(
+        StatsTimeSlotSection(
             tabEnum = tabEnum,
             weekOffset = weekOffsetComparison,
             onWeekChange = { weekOffsetComparison = it },
+            monthOffset = monthOffsetComparison,
+            onMonthChange = { monthOffsetComparison = it },
             yearOffset = yearOffsetComparison,
             onYearChange = { yearOffsetComparison = it },
         )
@@ -380,14 +463,15 @@ private fun RowScope.StatsInsightStatItem(label: String, value: String, modifier
 
 /**
  * Figma 919:3520 / 919:3764 / 919:3830 — 기간별 사용량 카드
- * 주간: 요일별(월~일). 월간: 1~12월. 연간: 최대 6년(좌측정렬)
- * 연도선택: 월간/연간 공통. 이번달/올해만 Primary
+ * 주간: 요일별(월~일). 월간: 1일~31일(가로스크롤). 연간: 최대 6년(좌측정렬)
  */
 @Composable
 private fun StatsDateChartSection(
     tabEnum: StatisticsData.Tab,
     weekOffset: Int,
     onWeekChange: (Int) -> Unit,
+    monthOffset: Int,
+    onMonthChange: (Int) -> Unit,
     yearOffset: Int,
     onYearChange: (Int) -> Unit,
     onInfoClick: (() -> Unit)? = null,
@@ -396,11 +480,11 @@ private fun StatsDateChartSection(
     val context = LocalContext.current
 
     var dayMinutes by remember { mutableStateOf<List<Long>>(List(7) { 0L }) }
-    var monthMinutes by remember { mutableStateOf<List<Long>>(List(12) { 0L }) }
+    var dayOfMonthMinutes by remember { mutableStateOf<List<Long>>(emptyList()) }
     var yearMinutes by remember { mutableStateOf<List<Long>>(emptyList()) }
     var yearLabels by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    LaunchedEffect(tabEnum, weekOffset, yearOffset) {
+    LaunchedEffect(tabEnum, weekOffset, monthOffset, yearOffset) {
         withContext(Dispatchers.IO) {
             when (tabEnum) {
                 StatisticsData.Tab.WEEKLY -> {
@@ -408,8 +492,8 @@ private fun StatsDateChartSection(
                     dayMinutes = StatisticsData.loadDayOfWeekMinutes(context, s, e)
                 }
                 StatisticsData.Tab.MONTHLY -> {
-                    val (s, e, _) = StatisticsData.getMonthRange(yearOffset)
-                    monthMinutes = StatisticsData.loadMonthMinutes(context, s, e)
+                    val (s, e, _) = StatisticsData.getSingleMonthRange(monthOffset)
+                    dayOfMonthMinutes = StatisticsData.loadDayOfMonthMinutes(context, s, e)
                 }
                 StatisticsData.Tab.YEARLY -> {
                     val (ranges, labels) = StatisticsData.getYearRanges(yearOffset)
@@ -421,11 +505,12 @@ private fun StatsDateChartSection(
         }
     }
 
-    val nav = remember(tabEnum, weekOffset, yearOffset) {
-        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+    val nav = remember(tabEnum, weekOffset, monthOffset, yearOffset) {
+        val label = formatPeriodLabel(tabEnum, weekOffset, monthOffset, yearOffset)
         when (tabEnum) {
             StatisticsData.Tab.WEEKLY -> NavState(label, true, weekOffset < 0, { onWeekChange(weekOffset - 1) }, { if (weekOffset < 0) onWeekChange(weekOffset + 1) })
-            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
+            StatisticsData.Tab.MONTHLY -> NavState(label, true, monthOffset < 0, { onMonthChange(monthOffset - 1) }, { if (monthOffset < 0) onMonthChange(monthOffset + 1) })
+            StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
             else -> NavState("", false, false, {}, {})
         }
     }
@@ -455,20 +540,17 @@ private fun StatsDateChartSection(
                 values = dayMinutes,
                 isCurrentPeriod = weekOffset == 0,
             )
-            StatisticsData.Tab.MONTHLY -> MonthBarChart(
-                values = monthMinutes,
-                isCurrentYear = yearOffset == 0,
+            StatisticsData.Tab.MONTHLY -> MonthDailyBarChart(
+                values = dayOfMonthMinutes,
+                isCurrentMonth = monthOffset == 0,
             )
             StatisticsData.Tab.YEARLY -> {
                 val minSize = minOf(yearMinutes.size, yearLabels.size)
                 val safeMinutes = yearMinutes.take(minSize)
                 val safeYearLabels = yearLabels.take(minSize)
-                val indicesWithData = safeMinutes.indices.filter { safeMinutes.getOrElse(it) { 0L } > 0L }
-                val displayValues = if (indicesWithData.isEmpty()) safeMinutes else indicesWithData.map { safeMinutes.getOrElse(it) { 0L } }
-                val displayLabels = if (indicesWithData.isEmpty()) safeYearLabels else indicesWithData.map { safeYearLabels.getOrElse(it) { "" } }
                 YearBarChart(
-                    values = displayValues,
-                    labels = displayLabels,
+                    values = safeMinutes,
+                    labels = safeYearLabels,
                     isCurrentYear = yearOffset == 0,
                 )
             }
@@ -485,13 +567,17 @@ private data class NavState(
     val onNext: () -> Unit,
 )
 
-/** 우측 날짜/기간 표기: 주간="이번 주"/"N주 전", 월간/연간="2025년"/"2024년" 등 */
-private fun formatPeriodLabel(tabEnum: StatisticsData.Tab, weekOffset: Int, yearOffset: Int): String = when (tabEnum) {
+/** 우측 날짜/기간 표기: 주간="이번 주"/"N주 전", 월간="이번 달"/"N월", 연간="2025년" 등 */
+private fun formatPeriodLabel(tabEnum: StatisticsData.Tab, weekOffset: Int, monthOffset: Int, yearOffset: Int): String = when (tabEnum) {
     StatisticsData.Tab.WEEKLY -> when (weekOffset) {
         0 -> "이번 주"
         else -> "${-weekOffset}주 전"
     }
-    StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> {
+    StatisticsData.Tab.MONTHLY -> {
+        val (_, _, label) = StatisticsData.getSingleMonthRange(monthOffset)
+        label
+    }
+    StatisticsData.Tab.YEARLY -> {
         val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + yearOffset
         "${year}년"
     }
@@ -519,13 +605,6 @@ private fun formatPeriodLabelMonthAware(
     }
     else -> ""
 }
-
-private data class ComparisonBarState(
-    val label: String,
-    val barCount: Int,
-    val labels: List<String>,
-    val nav: NavState,
-)
 
 /** 카드 제목 + 날짜 범위 Row (스크린샷: 제목 좌측, 날짜+화살표 우측) */
 @Composable
@@ -637,11 +716,63 @@ private fun StatsDateRangeRow(
     }
 }
 
-/** Figma 919:3520 — 표시 순서: 월→화→수→목→금→토→일 */
+/** Figma 919:3520 / 1053:6211 — 기간별 사용량 차트 공통 */
 private val DayLabels = listOf("월", "화", "수", "목", "금", "토", "일")
 private val BarChartHeight = 126.dp
+private val ChartVerticalPadding = 10.dp
+private val TotalChartHeight = BarChartHeight + ChartVerticalPadding * 2
 private val BarWidth = 26.dp
 private val BarCornerRadius = 2.dp
+/** Figma: Y축 레이블 너비 26px */
+private val ChartYAxisWidth = 26.dp
+/** Figma: Y축~차트 간격 12px (38 - 26) */
+private val ChartYAxisToChartGap = 6.dp
+/** Figma: X축 레이블 상단 간격 10px */
+private val ChartToXLabelsGap = 10.dp
+/** 시간대별 사용량: 차트~X축 라벨 간격 */
+private val TimeSlotChartToLabelsGap = 12.dp
+/** Figma Caption1: 12sp Medium, lineHeight 19sp, TextCaption (#4d4d4d) */
+private val ChartAxisTextStyle = AppTypography.Caption1.copy(color = AppColors.TextCaption)
+/** Y축 틱 라벨을 각 그리드 라인과 수직 중앙 정렬하여 표시 (주간/월간/연간 동일) */
+@Composable
+private fun ChartYAxisLabels(
+    yTicks: List<Long>,
+    modifier: Modifier = Modifier,
+) {
+    val ticks = yTicks.asReversed()
+    if (ticks.size < 2) return
+    Column(
+        modifier = modifier
+            .width(ChartYAxisWidth)
+            .height(TotalChartHeight)
+            .padding(start = 2.dp)
+            .alpha(0.8f)
+            .padding(vertical = ChartVerticalPadding),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        ticks.forEach { tick ->
+            Text(
+                text = formatChartYLabel(tick),
+                style = ChartAxisTextStyle,
+            )
+        }
+    }
+}
+
+/** 분 단위 값을 차트 Y축 레이블로 포맷 (60분 이상이면 "XH", 6만분 이상이면 "X천H") */
+private fun formatChartYLabel(minutes: Long): String = when {
+    minutes <= 0 -> "0"
+    minutes >= 60_000 -> "${(minutes + 30_000) / 60_000}천H"
+    minutes >= 60 -> "${minutes / 60}H"
+    else -> "$minutes"
+}
+
+/** 기간별 사용량 Y축 고정: 0~8H (주간/월간/연간 동일) */
+private val PeriodChartFixedYTicks = listOf(0L, 120L, 240L, 360L, 480L) // 0, 2H, 4H, 6H, 8H
+private val PeriodChartFixedMaxMinutes = 480L // 8H
+
+/** 시간대별 사용량 전용: Y축 0, 1H, 2H (3개 고정) */
+private fun computeTimeSlotYTicks(): List<Long> = listOf(0L, 60L, 120L)
 
 /** values: [월,화,수,목,금,토,일] 순. 이번주만 max bar Primary, 과거 주는 모두 Grey350 */
 @Composable
@@ -651,65 +782,72 @@ private fun DayOfWeekBarChart(
     modifier: Modifier = Modifier,
 ) {
     val padded = if (values.size >= 7) values.take(7) else values + List(7 - values.size) { 0L }
-    val maxVal = padded.maxOrNull()?.takeIf { it > 0 } ?: 1L
-    val normalized = padded.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
-    val highlightIdx = if (isCurrentPeriod) 6 else -1 // 우측(일) 막대만 컬러
+    val normalized = padded.map { (it.toFloat() / PeriodChartFixedMaxMinutes).coerceIn(0f, 1f) }
+    val highlightIdx = if (isCurrentPeriod) 6 else -1
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(modifier = Modifier.fillMaxWidth().height(BarChartHeight)) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                for (i in 0..6) {
-                    val y = size.height * (i / 6f)
-                    drawLine(
-                        color = AppColors.ChartGuideline,
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        pathEffect = pathEffect,
-                    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            ChartYAxisLabels(yTicks = PeriodChartFixedYTicks)
+            Spacer(modifier = Modifier.width(ChartYAxisToChartGap))
+            Box(modifier = Modifier.weight(1f).height(TotalChartHeight).padding(vertical = ChartVerticalPadding)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                    for (i in 0..4) {
+                        val y = size.height * (i / 4f)
+                        drawLine(
+                            color = AppColors.Grey450.copy(alpha = 0.6f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            pathEffect = pathEffect,
+                        )
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                normalized.forEachIndexed { index, value ->
-                    val isHighlight = isCurrentPeriod && (index == highlightIdx && value > 0f)
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.BottomCenter,
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    normalized.forEachIndexed { index, value ->
+                        val isHighlight = isCurrentPeriod && (index == highlightIdx && value > 0f)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .width(BarWidth)
-                                    .fillMaxHeight(value)
-                                    .clip(RoundedCornerShape(BarCornerRadius))
-                                    .background(
-                                        if (isHighlight) AppColors.ChartTrackFill
-                                        else AppColors.Grey350
-                                    ),
-                            )
+                                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(BarWidth)
+                                        .fillMaxHeight(value)
+                                        .clip(RoundedCornerShape(BarCornerRadius))
+                                        .background(
+                                            if (isHighlight) AppColors.ChartTrackFill
+                                            else AppColors.Grey350
+                                        ),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.height(ChartToXLabelsGap))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = ChartYAxisWidth + ChartYAxisToChartGap)
+                .alpha(0.8f),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
             DayLabels.forEach { label ->
                 Text(
                     text = label,
-                    style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+                    style = ChartAxisTextStyle,
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                 )
@@ -718,7 +856,119 @@ private fun DayOfWeekBarChart(
     }
 }
 
-/** Figma 919:3764 — 월간: 1~12월, 막대 16dp. 이번 달만 Primary */
+/** 월간: 1일~31일, 주간과 동일 Y축·막대 스타일. 가로 스크롤. 이번 달만 오늘 Primary */
+private val MonthDailySlotWidth = 36.dp
+
+@Composable
+private fun MonthDailyBarChart(
+    values: List<Long>,
+    isCurrentMonth: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val padded = values
+    val daysInMonth = padded.size.coerceAtLeast(1)
+    val normalized = padded.map { (it.toFloat() / PeriodChartFixedMaxMinutes).coerceIn(0f, 1f) }
+    val todayDay = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+    val highlightIdx = if (isCurrentMonth && todayDay <= daysInMonth) todayDay - 1 else -1
+    val scrollState = rememberScrollState()
+    val density = LocalDensity.current
+
+    LaunchedEffect(isCurrentMonth, todayDay) {
+        if (!isCurrentMonth) return@LaunchedEffect
+        delay(50)
+        val slotWidthPx = with(density) { MonthDailySlotWidth.roundToPx() }
+        // 오늘을 먼저 보이되, 직전(어제) 데이터가 왼쪽 경계에 살짝 걸쳐 보이게 스크롤
+        val peekPx = (slotWidthPx * 0.35f).toInt()
+        val targetScroll = maxOf(0, (todayDay - 1) * slotWidthPx - peekPx)
+        scrollState.scrollTo(minOf(targetScroll, scrollState.maxValue.coerceAtLeast(0)))
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            // Y축: 고정 (스크롤 안 됨)
+            ChartYAxisLabels(yTicks = PeriodChartFixedYTicks)
+            Spacer(modifier = Modifier.width(ChartYAxisToChartGap))
+            // 막대 + X축 범례만 가로 스크롤
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(scrollState),
+            ) {
+            Column(modifier = Modifier.width(MonthDailySlotWidth * daysInMonth)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(TotalChartHeight)
+                        .padding(vertical = ChartVerticalPadding),
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        for (i in 0..4) {
+                            val y = size.height * (i / 4f)
+                            drawLine(
+                                color = AppColors.Grey450.copy(alpha = 0.6f),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                pathEffect = pathEffect,
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        normalized.forEachIndexed { index, value ->
+                            val isHighlight = isCurrentMonth && (index == highlightIdx && value > 0f)
+                            Column(
+                                modifier = Modifier.width(MonthDailySlotWidth),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                    contentAlignment = Alignment.BottomCenter,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(BarWidth)
+                                            .fillMaxHeight(value)
+                                            .clip(RoundedCornerShape(BarCornerRadius))
+                                            .background(
+                                                if (isHighlight) AppColors.ChartTrackFill
+                                                else AppColors.Grey350
+                                            ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(ChartToXLabelsGap))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(0.8f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    (1..daysInMonth).forEach { day ->
+                        Text(
+                            text = "${day}일",
+                            style = ChartAxisTextStyle,
+                            modifier = Modifier.width(MonthDailySlotWidth),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            }
+        }
+    }
+}
+
+/** Figma 919:3764 — 연간 월별: 1~12월, 막대 16dp (연간 전용) */
 private val MonthBarWidth = 16.dp
 private val MonthLabels = (1..12).map { "${it}월" }
 
@@ -729,66 +979,73 @@ private fun MonthBarChart(
     modifier: Modifier = Modifier,
 ) {
     val padded = if (values.size >= 12) values.take(12) else values + List(12 - values.size) { 0L }
-    val maxVal = padded.maxOrNull()?.takeIf { it > 0 } ?: 1L
-    val normalized = padded.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
+    val normalized = padded.map { (it.toFloat() / PeriodChartFixedMaxMinutes).coerceIn(0f, 1f) }
     val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
     val highlightIdx = if (isCurrentYear) currentMonth else -1
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(modifier = Modifier.fillMaxWidth().height(BarChartHeight)) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                for (i in 0..6) {
-                    val y = size.height * (i / 6f)
-                    drawLine(
-                        color = AppColors.ChartGuideline,
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        pathEffect = pathEffect,
-                    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            ChartYAxisLabels(yTicks = PeriodChartFixedYTicks)
+            Spacer(modifier = Modifier.width(ChartYAxisToChartGap))
+            Box(modifier = Modifier.weight(1f).height(TotalChartHeight).padding(vertical = ChartVerticalPadding)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                    for (i in 0..4) {
+                        val y = size.height * (i / 4f)
+                        drawLine(
+                            color = AppColors.Grey450.copy(alpha = 0.6f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            pathEffect = pathEffect,
+                        )
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                normalized.forEachIndexed { index, value ->
-                    val isHighlight = isCurrentYear && index == highlightIdx && value > 0f
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.BottomCenter,
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    normalized.forEachIndexed { index, value ->
+                        val isHighlight = isCurrentYear && index == highlightIdx && value > 0f
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .width(MonthBarWidth)
-                                    .fillMaxHeight(value)
-                                    .clip(RoundedCornerShape(BarCornerRadius))
-                                    .background(
-                                        if (isHighlight) AppColors.ChartTrackFill
-                                        else AppColors.Grey350
-                                    ),
-                            )
+                                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(MonthBarWidth)
+                                        .fillMaxHeight(value)
+                                        .clip(RoundedCornerShape(BarCornerRadius))
+                                        .background(
+                                            if (isHighlight) AppColors.ChartTrackFill
+                                            else AppColors.Grey350
+                                        ),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Spacer(modifier = Modifier.height(ChartToXLabelsGap))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = ChartYAxisWidth + ChartYAxisToChartGap)
+                .alpha(0.8f),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
             MonthLabels.forEach { label ->
                 Text(
                     text = label,
-                    style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+                    style = ChartAxisTextStyle,
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                 )
@@ -797,9 +1054,7 @@ private fun MonthBarChart(
     }
 }
 
-/** Figma 919:3830 — 연간: 최대 6년, 막대 42dp. 6년 미만이면 좌측정렬. 올해만 Primary */
-private val YearBarWidth = 42.dp
-
+/** 연간: 주간/월간과 동일 차트 스타일. 막대 26dp, X축 2024/2025/2026 */
 @Composable
 private fun YearBarChart(
     values: List<Long>,
@@ -807,92 +1062,85 @@ private fun YearBarChart(
     isCurrentYear: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (values.isEmpty() && labels.isEmpty()) {
-        Box(modifier = modifier.fillMaxWidth().height(BarChartHeight))
-        return
-    }
-    val count = values.size.coerceAtLeast(1)
-    val maxVal = values.maxOrNull()?.takeIf { it > 0 } ?: 1L
-    val normalized = values.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
+    val count = maxOf(values.size, labels.size).coerceAtLeast(1)
+    val padded = values.take(count) + List((count - values.size).coerceAtLeast(0)) { 0L }
+    val displayLabels = labels.take(count) + List((count - labels.size).coerceAtLeast(0)) { "" }
+    val normalized = padded.map { (it.toFloat() / PeriodChartFixedMaxMinutes).coerceIn(0f, 1f) }
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-    val displayLabels = labels.take(count).let { l ->
-        if (l.size >= count) l else l + (1..(count - l.size)).map { "" }
-    }
+    val highlightIdx = displayLabels.indexOfFirst { it.toIntOrNull() == currentYear }.takeIf { it >= 0 } ?: -1
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = if (count < 6) Alignment.Start else Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(BarChartHeight),
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                for (i in 0..6) {
-                    val y = size.height * (i / 6f)
-                    drawLine(
-                        color = AppColors.ChartGuideline,
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        pathEffect = pathEffect,
-                    )
+            ChartYAxisLabels(yTicks = PeriodChartFixedYTicks)
+            Spacer(modifier = Modifier.width(ChartYAxisToChartGap))
+            Box(modifier = Modifier.weight(1f).height(TotalChartHeight).padding(vertical = ChartVerticalPadding)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                    for (i in 0..4) {
+                        val y = size.height * (i / 4f)
+                        drawLine(
+                            color = AppColors.Grey450.copy(alpha = 0.6f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            pathEffect = pathEffect,
+                        )
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = if (count < 6) Arrangement.spacedBy(4.dp, Alignment.Start) else Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                normalized.forEachIndexed { index, value ->
-                    val yearStr = displayLabels.getOrElse(index) { "" }
-                    val year = yearStr.toIntOrNull() ?: 0
-                    val isHighlight = isCurrentYear && year == currentYear && value > 0f
-                    Column(
-                        modifier = Modifier.width(YearBarWidth),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Box(
-                            modifier = Modifier.width(YearBarWidth).fillMaxHeight(),
-                            contentAlignment = Alignment.BottomCenter,
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    normalized.forEachIndexed { index, value ->
+                        val isHighlight = isCurrentYear && (index == highlightIdx && value > 0f)
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
-                                modifier = Modifier.width(YearBarWidth)
-                                    .fillMaxHeight(value)
-                                    .clip(RoundedCornerShape(BarCornerRadius))
-                                    .background(
-                                        if (isHighlight) AppColors.ChartTrackFill
-                                        else AppColors.Grey350
-                                    ),
-                            )
+                                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(BarWidth)
+                                        .fillMaxHeight(value)
+                                        .clip(RoundedCornerShape(BarCornerRadius))
+                                        .background(
+                                            if (isHighlight) AppColors.ChartTrackFill
+                                            else AppColors.Grey350
+                                        ),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(ChartToXLabelsGap))
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (count < 6) Arrangement.spacedBy(4.dp, Alignment.Start) else Arrangement.SpaceEvenly,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = ChartYAxisWidth + ChartYAxisToChartGap)
+                .alpha(0.8f),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            displayLabels.take(count).forEach { label ->
-                Box(
-                    modifier = Modifier.width(YearBarWidth),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
-                        textAlign = TextAlign.Center,
-                    )
-                }
+            displayLabels.forEach { label ->
+                Text(
+                    text = label,
+                    style = ChartAxisTextStyle,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
 }
 
-/** Figma 925:7299 — 카테고리 색상: OTT, SNS, 게임, 쇼핑, 웹툰, 주식,코인 */
+/** Figma 925:7299 / 1044 — 카테고리 색상: OTT, SNS, 게임, 쇼핑, 웹툰, 주식,코인, 기타 */
 private val CategoryColors = mapOf(
     "OTT" to Color(0xFFEBCFFF),
     "SNS" to Color(0xFFFFC34B),
@@ -900,6 +1148,7 @@ private val CategoryColors = mapOf(
     "쇼핑" to Color(0xFFA2A2A2),
     "웹툰" to Color(0xFF88C9FF),
     "주식,코인" to Color(0xFF3D9E5D),
+    "기타" to Color(0xFFBDBDBD),
 )
 
 /** Figma 925:7299 — 카테고리 통계 디자인용 더미 앱 목록 (usageMs로 OTT36/SNS20/게임19/쇼핑18/웹툰15/주식코인2% 비율) */
@@ -1001,7 +1250,7 @@ private fun StatsStackedBarAndAppList(
             .mapValues { (_, apps) -> apps.sumOf { it.usageMs } }
         val total = usageByCategory.values.sum()
         if (total == 0L) {
-            listOf("OTT" to 36f, "SNS" to 20f, "게임" to 19f, "쇼핑" to 18f, "웹툰" to 15f, "주식,코인" to 2f)
+            listOf("OTT" to 35f, "SNS" to 20f, "게임" to 19f, "쇼핑" to 18f, "웹툰" to 15f, "주식,코인" to 2f, "기타" to 1f)
         } else {
             usageByCategory
                 .toList()
@@ -1177,7 +1426,7 @@ private fun StatsAppRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     categoryTag?.let { tag ->
-                        StatsCategoryTag(tag = tag)
+                        CategoryTag(tag = tag)
                     }
                     if (showDangerLabel) {
                         LabelDanger()
@@ -1197,27 +1446,6 @@ private fun StatsAppRow(
         Text(
             text = usageMinutes,
             style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
-        )
-    }
-}
-
-@Composable
-private fun StatsCategoryTag(tag: String, modifier: Modifier = Modifier) {
-    val bgColor = CategoryColors[tag] ?: AppColors.Grey350
-    val textColor = when (tag) {
-        "SNS" -> Color(0xFF553C0A)
-        "OTT" -> Color(0xFF55366B)
-        else -> Color.White
-    }
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(3.dp))
-            .background(bgColor)
-            .padding(horizontal = 4.dp, vertical = 3.dp),
-    ) {
-        Text(
-            text = tag,
-            style = AppTypography.LabelDanger.copy(color = textColor),
         )
     }
 }
@@ -1371,80 +1599,56 @@ private fun StatsRestrictionSection(
             }
         }
 
-        ColeInfoBoxCompact(text = infoMessage, maxLines = 2)
+        ColeInfoBoxCompactNewDesign(
+            text = infoMessage,
+            maxLines = 2,
+            contentPaddingHorizontal = 16.dp,
+            contentPaddingVertical = 18.dp,
+        )
     }
 }
 
-private val ComparisonMonthLabels = listOf("1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월")
-
-/** 사용시간 비교 카드 */
+/** 시간대별 사용량 카드 (Figma 925-7593). 기간별 사용량과 동일 Y축·가로선 스타일 */
 @Composable
-private fun StatsGroupedBarSection(
+private fun StatsTimeSlotSection(
     tabEnum: StatisticsData.Tab,
     weekOffset: Int,
     onWeekChange: (Int) -> Unit,
+    monthOffset: Int,
+    onMonthChange: (Int) -> Unit,
     yearOffset: Int,
     onYearChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val barState = remember(tabEnum, weekOffset, yearOffset) {
-        val label = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
+    val nav = remember(tabEnum, weekOffset, monthOffset, yearOffset) {
+        val label = formatPeriodLabelMonthAware(tabEnum, weekOffset, monthOffset, yearOffset)
         when (tabEnum) {
-            StatisticsData.Tab.WEEKLY -> ComparisonBarState(
-                label,
-                7,
-                DayLabels,
-                NavState(label, true, weekOffset < -1, { onWeekChange(weekOffset - 1) }, { if (weekOffset < -1) onWeekChange(weekOffset + 1) }),
-            )
-            StatisticsData.Tab.MONTHLY, StatisticsData.Tab.YEARLY -> {
-                val yr = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + yearOffset
-                val count = if (tabEnum == StatisticsData.Tab.MONTHLY) 12 else 6
-                val lbl = if (tabEnum == StatisticsData.Tab.MONTHLY) ComparisonMonthLabels else (yr - 5..yr).map { "$it" }
-                ComparisonBarState(label, count, lbl, NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) }))
-            }
-            else -> ComparisonBarState("", 7, DayLabels, NavState("", false, false, {}, {}))
+            StatisticsData.Tab.WEEKLY -> NavState(label, true, weekOffset < -1, { onWeekChange(weekOffset - 1) }, { if (weekOffset < -1) onWeekChange(weekOffset + 1) })
+            StatisticsData.Tab.MONTHLY -> NavState(label, true, monthOffset < 0, { onMonthChange(monthOffset - 1) }, { if (monthOffset < 0) onMonthChange(monthOffset + 1) })
+            StatisticsData.Tab.YEARLY -> NavState(label, true, yearOffset < 0, { onYearChange(yearOffset - 1) }, { if (yearOffset < 0) onYearChange(yearOffset + 1) })
+            else -> NavState("", false, false, {}, {})
         }
     }
-    var comparisonData by remember { mutableStateOf<Pair<List<Long>, List<Long>>>(Pair(List(barState.barCount) { 0L }, List(barState.barCount) { 0L })) }
 
-    LaunchedEffect(tabEnum, weekOffset, yearOffset) {
+    var timeSlotMinutes by remember { mutableStateOf<List<Long>>(List(12) { 0L }) }
+    LaunchedEffect(tabEnum, weekOffset, monthOffset, yearOffset) {
         withContext(Dispatchers.IO) {
-            comparisonData = when (tabEnum) {
-                StatisticsData.Tab.WEEKLY -> StatisticsData.loadWeekSelectedVsCurrent(context, weekOffset)
-                StatisticsData.Tab.MONTHLY -> StatisticsData.loadMonthSelectedVsCurrent(context, yearOffset)
-                StatisticsData.Tab.YEARLY -> StatisticsData.loadYearSelectedVsCurrent(context, yearOffset)
-                else -> Pair(List(7) { 0L }, List(7) { 0L })
+            val (startMs, endMs, _) = when (tabEnum) {
+                StatisticsData.Tab.WEEKLY -> StatisticsData.getWeekRange(weekOffset)
+                StatisticsData.Tab.MONTHLY -> StatisticsData.getSingleMonthRange(monthOffset)
+                StatisticsData.Tab.YEARLY -> StatisticsData.getMonthRange(yearOffset)
+                else -> StatisticsData.getWeekRange(0)
             }
+            timeSlotMinutes = StatisticsData.loadTimeSlotMinutes12(context, startMs, endMs)
         }
     }
 
-    val (selectedData, currentData) = comparisonData
-    val minSize = minOf(selectedData.size, currentData.size, barState.labels.size)
-    val safeSelected = selectedData.take(minSize)
-    val safeCurrent = currentData.take(minSize)
-    val safeLabels = barState.labels.take(minSize)
-    val (displaySelected, displayCurrent, displayLabels) = when (tabEnum) {
-        StatisticsData.Tab.YEARLY -> {
-            val indicesWithData = safeSelected.indices.filter { i ->
-                safeSelected.getOrElse(i) { 0L } > 0L || safeCurrent.getOrElse(i) { 0L } > 0L
-            }
-            if (indicesWithData.isEmpty()) {
-                Triple(safeSelected, safeCurrent, safeLabels)
-            } else {
-                Triple(
-                    indicesWithData.map { safeSelected.getOrElse(it) { 0L } },
-                    indicesWithData.map { safeCurrent.getOrElse(it) { 0L } },
-                    indicesWithData.map { safeLabels.getOrElse(it) { "" } },
-                )
-            }
-        }
-        else -> Triple(safeSelected, safeCurrent, safeLabels)
-    }
-    val displayCount = displayLabels.size
-    val maxVal = (displaySelected + displayCurrent).maxOrNull()?.takeIf { it > 0 } ?: 1L
-    val selectedNorm = displaySelected.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
-    val currentNorm = displayCurrent.map { (it.toFloat() / maxVal).coerceIn(0f, 1f) }
+    val padded = if (timeSlotMinutes.size >= 12) timeSlotMinutes.take(12) else timeSlotMinutes + List(12 - timeSlotMinutes.size) { 0L }
+    val maxIdx = padded.indices.maxByOrNull { padded[it] }?.takeIf { padded[it] > 0 } ?: -1
+    val yTicks = computeTimeSlotYTicks()
+    val niceMax = 120L // 2H 고정
+    val normalized = padded.map { (it.toFloat() / niceMax).coerceIn(0f, 1f) }
 
     Column(
         modifier = modifier
@@ -1452,148 +1656,145 @@ private fun StatsGroupedBarSection(
             .shadow(6.dp, RoundedCornerShape(12.dp), false, Color.Black.copy(alpha = 0.06f), Color.Black.copy(alpha = 0.06f))
             .clip(RoundedCornerShape(12.dp))
             .background(AppColors.SurfaceBackgroundCard)
-            .padding(horizontal = 16.dp, vertical = 26.dp),
+            .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         StatsCardTitleRow(
-            title = "사용시간 비교",
+            title = "시간대별 사용량",
             titleIconSpacing = 4.dp,
-            dateRangeText = barState.label,
-            canGoPrev = barState.nav.canPrev,
-            canGoNext = barState.nav.canNext,
-            onPrevClick = barState.nav.onPrev,
-            onNextClick = barState.nav.onNext,
-            showPeriodSelector = tabEnum != StatisticsData.Tab.YEARLY,
+            dateRangeText = nav.text,
+            canGoPrev = nav.canPrev,
+            canGoNext = nav.canNext,
+            onPrevClick = nav.onPrev,
+            onNextClick = nav.onNext,
+            showPeriodSelector = true,
         )
 
-        val (barWidth, barGap, useFlexBar) = when {
-            tabEnum == StatisticsData.Tab.MONTHLY -> Triple(4.dp, 4.dp, false)
-            tabEnum == StatisticsData.Tab.YEARLY -> Triple(16.dp, 4.dp, false)
-            else -> Triple(11.dp, 4.dp, false)
-        }
         Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = if (tabEnum == StatisticsData.Tab.YEARLY) Alignment.Start else Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TimeSlotChartToLabelsGap),
         ) {
-            Box(modifier = Modifier.fillMaxWidth().height(BarChartHeight)) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                    val gridLines = (displayCount - 1).coerceAtLeast(1)
-                    for (i in 0..gridLines) {
-                        val y = size.height * (i.toFloat() / gridLines)
-                        drawLine(
-                            color = AppColors.ChartGuideline,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            pathEffect = pathEffect,
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(6.dp, Alignment.Start) else Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    selectedNorm.forEachIndexed { index, vSelected ->
-                        val vCurrent = currentNorm.getOrElse(index) { 0f }
-                        val columnMod = if (tabEnum == StatisticsData.Tab.YEARLY) Modifier.width(barWidth * 2 + barGap) else Modifier.weight(1f)
-                        Column(
-                            modifier = columnMod,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxHeight(),
-                                horizontalArrangement = Arrangement.spacedBy(barGap),
-                                verticalAlignment = Alignment.Bottom,
-                            ) {
-                                Box(
-                                    modifier = (if (useFlexBar) Modifier.weight(1f) else Modifier.width(barWidth))
-                                        .fillMaxHeight(vSelected)
-                                        .clip(RoundedCornerShape(BarCornerRadius))
-                                        .background(AppColors.Grey350),
-                                )
-                                Box(
-                                    modifier = (if (useFlexBar) Modifier.weight(1f) else Modifier.width(barWidth))
-                                        .fillMaxHeight(vCurrent)
-                                        .clip(RoundedCornerShape(BarCornerRadius))
-                                        .background(AppColors.ChartTrackFill),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
+            TimeSlotBarChart(
+                values = normalized,
+                yTicks = yTicks,
+                maxValueIdx = maxIdx,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (tabEnum == StatisticsData.Tab.YEARLY) Arrangement.spacedBy(6.dp, Alignment.Start) else Arrangement.SpaceEvenly,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = ChartYAxisWidth + ChartYAxisToChartGap)
+                    .alpha(0.8f),
+                horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
-                displayLabels.forEach { label ->
+                StatisticsData.TimeSlot4SectionLabels.forEach { label ->
                     Text(
                         text = label,
-                        style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
-                        modifier = if (tabEnum == StatisticsData.Tab.YEARLY) Modifier.width(barWidth * 2 + barGap) else Modifier.weight(1f),
+                        style = ChartAxisTextStyle,
+                        modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            val legendSelectedLabel = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
-            val legendCurrentLabel = when (tabEnum) {
-                StatisticsData.Tab.WEEKLY -> "이번 주"
-                StatisticsData.Tab.MONTHLY -> "이번 달"
-                StatisticsData.Tab.YEARLY -> "올해"
-                else -> ""
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(AppColors.Grey350),
-                    )
-                    Text(
-                        text = legendSelectedLabel,
-                        style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(AppColors.ChartTrackFill),
-                    )
-                    Text(
-                        text = legendCurrentLabel,
-                        style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
-                    )
+        }
+
+        ColeInfoBoxCompactNewDesign(
+            text = when (tabEnum) {
+                StatisticsData.Tab.WEEKLY -> "지난주와 비슷한 패턴이에요. 꾸준히 유지하고 있다는 것 자체가 대단해요. 한 가지만 더 개선한다면 저녁 시간대 사용을 줄여보세요."
+                StatisticsData.Tab.MONTHLY -> "이번 달 시간대별 사용 패턴이에요. 어떤 시간에 가장 많이 쓰는지 확인해보세요."
+                StatisticsData.Tab.YEARLY -> "올해 시간대별 사용 패턴이에요. 습관적인 사용 시간대를 확인해보세요."
+                else -> "시간대별 사용 패턴을 확인해보세요."
+            },
+            contentPaddingHorizontal = 16.dp,
+            contentPaddingVertical = 18.dp,
+        )
+    }
+}
+
+/** 시간대별 막대 차트. 4구간×3막대, Y축 0/1H/2H 3개, 최대값 막대 Red300 (Figma 925-7593) */
+private val TimeSlotBarWidth = 16.dp
+private val TimeSlotBarGap = 8.dp
+/** Figma 925-7593: 말풍선~최대 막대 간격 3px */
+private val SpeechBubbleToBarGap = 3.dp
+
+@Composable
+private fun TimeSlotBarChart(
+    values: List<Float>,
+    yTicks: List<Long>,
+    maxValueIdx: Int,
+    modifier: Modifier = Modifier,
+) {
+    val padded = if (values.size >= 12) values.take(12) else values + List(12 - values.size) { 0f }
+    val density = LocalDensity.current
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            ChartYAxisLabels(yTicks = yTicks)
+            Spacer(modifier = Modifier.width(ChartYAxisToChartGap))
+            BoxWithConstraints(modifier = Modifier.weight(1f).height(TotalChartHeight).padding(vertical = ChartVerticalPadding)) {
+                val chartWidthPx = with(density) { maxWidth.roundToPx() }
+                val barWidthPx = with(density) { TimeSlotBarWidth.roundToPx() }
+                val gapPx = if (chartWidthPx > barWidthPx * 12) (chartWidthPx - barWidthPx * 12) / 13 else 0
+                val speechBubbleGapPx = with(density) { SpeechBubbleToBarGap.roundToPx() }
+                val maxBarRightPx = if (maxValueIdx in 0..11 && padded.getOrElse(maxValueIdx) { 0f } > 0f) {
+                    (maxValueIdx + 1) * barWidthPx + maxValueIdx * gapPx
+                } else -1
+                val bubbleOffsetXPx = if (maxBarRightPx >= 0) maxBarRightPx + speechBubbleGapPx else -1
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        for (i in 0..2) {
+                            val y = size.height * (i / 2f)
+                            drawLine(
+                                color = AppColors.Grey450.copy(alpha = 0.6f),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                pathEffect = pathEffect,
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        (0..11).forEach { idx ->
+                            val value = padded.getOrElse(idx) { 0f }
+                            val isMax = idx == maxValueIdx && value > 0f
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(TimeSlotBarWidth),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(TimeSlotBarWidth)
+                                        .fillMaxHeight(value)
+                                        .clip(RoundedCornerShape(BarCornerRadius))
+                                        .background(
+                                            if (isMax) AppColors.Red300
+                                            else AppColors.Grey350
+                                        ),
+                                )
+                            }
+                        }
+                    }
+                    if (bubbleOffsetXPx >= 0) {
+                        SpeechBubble(
+                            text = "가장 많이 사용한 시간대",
+                            tailDirection = TailDirection.Start,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .offset { IntOffset(bubbleOffsetXPx, 0) },
+                        )
+                    }
                 }
             }
         }
-
-        val selectedLabel = formatPeriodLabel(tabEnum, weekOffset, yearOffset)
-
-        ColeInfoBoxCompact(
-            text = when (tabEnum) {
-                StatisticsData.Tab.WEEKLY -> "${selectedLabel}에 비해 이번 주 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
-                StatisticsData.Tab.MONTHLY -> "${selectedLabel}에 비해 이번 달 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
-                StatisticsData.Tab.YEARLY -> "${selectedLabel}에 비해 올해 사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
-                else -> "사용시간은 큰 차이 없지만 포기하지 않고 노력했어요"
-            },
-        )
     }
 }
 

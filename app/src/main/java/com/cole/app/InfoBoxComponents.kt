@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -31,6 +32,8 @@ fun ColeInfoBoxCompact(
     text: String,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
+    contentPaddingHorizontal: Dp = CompactBoxPaddingHorizontal,
+    contentPaddingVertical: Dp = CompactBoxPaddingVertical,
 ) {
     Box(
         modifier = modifier
@@ -38,12 +41,45 @@ fun ColeInfoBoxCompact(
             .heightIn(min = CompactBoxMinHeight)
             .background(AppColors.SurfaceBackgroundInfoBox, RoundedCornerShape(CompactBoxCornerRadius))
             .border(1.dp, AppColors.BorderInfoBox, RoundedCornerShape(CompactBoxCornerRadius))
-            .padding(horizontal = CompactBoxPaddingHorizontal, vertical = CompactBoxPaddingVertical),
+            .padding(horizontal = contentPaddingHorizontal, vertical = contentPaddingVertical),
     ) {
         Text(
             text = text,
             style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
-            textAlign = TextAlign.Center,
+            textAlign = TextAlign.Start,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = maxLines,
+            overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
+        )
+    }
+}
+
+/**
+ * ColeInfoBoxCompact 신규 디자인
+ * - border 제거
+ * - 배경: Primary50
+ * - 텍스트: Primary400
+ * - 기본 패딩: 상하 18dp, 좌우 16dp
+ */
+@Composable
+fun ColeInfoBoxCompactNewDesign(
+    text: String,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+    contentPaddingHorizontal: Dp = 16.dp,
+    contentPaddingVertical: Dp = 18.dp,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = CompactBoxMinHeight)
+            .background(AppColors.Primary50, RoundedCornerShape(CompactBoxCornerRadius))
+            .padding(horizontal = contentPaddingHorizontal, vertical = contentPaddingVertical),
+    ) {
+        Text(
+            text = text,
+            style = AppTypography.Caption1.copy(color = AppColors.Primary400),
+            textAlign = TextAlign.Start,
             modifier = Modifier.fillMaxWidth(),
             maxLines = maxLines,
             overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,

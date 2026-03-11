@@ -4,6 +4,7 @@ import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Process
@@ -56,13 +57,16 @@ object StatisticsData {
     /** 8개 슬롯 라벨 [3, 6, 9, 12, 15, 18, 21, 24] 순 */
     val SlotLabels = listOf(3, 6, 9, 12, 15, 18, 21, 24)
 
+    /** 시간대별 사용량 4구간×3막대: X축 "0~6시", "6~12시", "12~18시", "18~24시" */
+    val TimeSlot4SectionLabels = listOf("0~6시", "6~12시", "12~18시", "18~24시")
+
     data class StatsAppItem(
         val packageName: String,
         val name: String,
         val usageMinutes: String,
         val sessionCount: String,
         val isRestricted: Boolean,
-        /** 카테고리 태그 (SNS, OTT, 게임, 쇼핑, 웹툰, 주식/코인) — 매핑 없으면 null */
+        /** 카테고리 태그 (SNS, OTT, 게임, 쇼핑, 웹툰, 주식/코인, 기타) — 매핑 없으면 기타 */
         val categoryTag: String? = null,
         /** 카테고리 비율 계산용 (분) */
         val usageMs: Long = 0L,
@@ -150,6 +154,57 @@ object StatisticsData {
             cal.set(Calendar.MINUTE, 0)
             cal.set(Calendar.SECOND, 0)
             cal.set(Calendar.MILLISECOND, 0)
+            t = cal.timeInMillis
+        }
+        return dayMinutes.toList()
+    }
+
+    /** 일별(1~31일) 사용량 분. 선택한 한 달 범위. DB 우선, 오늘은 queryEvents 사용 */
+    fun loadDayOfMonthMinutes(context: Context, startMs: Long, endMs: Long): List<Long> {
+        val cal = Calendar.getInstance().apply { timeInMillis = startMs }
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        if (USE_DUMMY_FULL) {
+            val dayMinutes = LongArray(daysInMonth)
+            var t = startMs
+            for (d in 0 until daysInMonth) {
+                cal.timeInMillis = t
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(cal.timeInMillis)
+                dayMinutes[d] = dummyMinutesForDate(dateStr)
+                cal.add(Calendar.DAY_OF_YEAR, 1)
+                t = cal.timeInMillis
+            }
+            return dayMinutes.toList()
+        }
+        if (!hasUsageAccess(context)) return List(daysInMonth) { 0L }
+        val repo = UsageStatsLocalRepository(context)
+        val todayStr = UsageStatsLocalRepository.msToYyyyMmDd(System.currentTimeMillis())
+        val dayMinutes = LongArray(daysInMonth)
+        var t = startMs
+        for (d in 0 until daysInMonth) {
+            cal.timeInMillis = t
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val dayStart = cal.timeInMillis
+            val dateStr = UsageStatsLocalRepository.msToYyyyMmDd(dayStart)
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            val dayEnd = cal.timeInMillis
+            val mins = if (dateStr == todayStr) {
+                aggregateOneDayFromEvents(context, dayStart, minOf(dayEnd, System.currentTimeMillis())) / 60_000
+            } else {
+                repo.getDayTotalsForDatesBlocking(listOf(dateStr))[dateStr] ?: 0L
+            }
+            dayMinutes[d] = mins
+            cal.timeInMillis = t
+            cal.add(Calendar.DAY_OF_YEAR, 1)
             t = cal.timeInMillis
         }
         return dayMinutes.toList()
@@ -619,9 +674,14 @@ object StatisticsData {
 
     /** 8개 슬롯(24,3,6,9,12,15,18,21)별 사용량(분). SlotLabels 참고 */
     fun loadTimeSlotMinutes(context: Context, tab: Tab): List<Long> {
+        val (startMs, endMs) = getTimeRange(context, tab)
+        return loadTimeSlotMinutes(context, startMs, endMs)
+    }
+
+    /** 지정 기간(startMs~endMs)에 대한 8개 슬롯별 사용량(분) */
+    fun loadTimeSlotMinutes(context: Context, startMs: Long, endMs: Long): List<Long> {
         if (!hasUsageAccess(context)) return List(8) { 0L }
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(8) { 0L }
-        val (startMs, endMs) = getTimeRange(context, tab)
         val events = usm.queryEvents(startMs, endMs) ?: return List(8) { 0L }
         val event = UsageEvents.Event()
         val slotMinutes = LongArray(8)
@@ -640,6 +700,58 @@ object StatisticsData {
             }
         }
         return slotMinutes.toList()
+    }
+
+    /** 4구간×3막대: 12개 2시간 슬롯 (0~2,2~4,4~6, 6~8,8~10,10~12, 12~14,14~16,16~18, 18~20,20~22,22~24) */
+    fun loadTimeSlotMinutes12(context: Context, startMs: Long, endMs: Long): List<Long> {
+        if (!hasUsageAccess(context)) return List(12) { 0L }
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(12) { 0L }
+        val events = usm.queryEvents(startMs, endMs) ?: return List(12) { 0L }
+        val event = UsageEvents.Event()
+        val slotMinutes = LongArray(12)
+        val sessionStarts = mutableMapOf<String, Long>()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            when (event.eventType) {
+                UsageEvents.Event.MOVE_TO_FOREGROUND ->
+                    sessionStarts[event.packageName + ":" + event.className] = event.timeStamp
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                    val key = event.packageName + ":" + event.className
+                    val start = sessionStarts.remove(key) ?: continue
+                    val durationMs = (event.timeStamp - start).coerceAtLeast(0)
+                    addDurationToSlots12(slotMinutes, start, durationMs)
+                }
+            }
+        }
+        return slotMinutes.toList()
+    }
+
+    private fun addDurationToSlots12(slots: LongArray, startMs: Long, durationMs: Long) {
+        var remaining = durationMs
+        var t = startMs
+        val cal = Calendar.getInstance()
+        while (remaining > 0) {
+            cal.timeInMillis = t
+            val hour = cal.get(Calendar.HOUR_OF_DAY)
+            val slotIndex = (hour / 2).coerceIn(0, 11)
+            val slotEndHour = if (slotIndex == 11) 24 else (slotIndex + 1) * 2
+            @Suppress("UNCHECKED_CAST")
+            val slotEndCal = cal.clone() as Calendar
+            if (slotEndHour == 24) {
+                slotEndCal.add(Calendar.DAY_OF_YEAR, 1)
+                slotEndCal.set(Calendar.HOUR_OF_DAY, 0)
+            } else {
+                slotEndCal.set(Calendar.HOUR_OF_DAY, slotEndHour)
+            }
+            slotEndCal.set(Calendar.MINUTE, 0)
+            slotEndCal.set(Calendar.SECOND, 0)
+            slotEndCal.set(Calendar.MILLISECOND, 0)
+            val slotEndMs = slotEndCal.timeInMillis
+            val chunkMs = minOf(remaining, slotEndMs - t).coerceAtLeast(0)
+            slots[slotIndex] += chunkMs / 60_000
+            remaining -= chunkMs
+            t += chunkMs
+        }
     }
 
     /** durationMs를 startMs 시각 기준으로 슬롯에 분배. 24=00~02:59, 3=03~05:59, ..., 21=21~23:59 */
@@ -745,7 +857,7 @@ object StatisticsData {
                 val name = try {
                     pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString()
                 } catch (_: PackageManager.NameNotFoundException) { packageName }
-                val categoryTag = categoryByPackage[packageName]
+                val categoryTag = categoryByPackage[packageName] ?: "기타"
                 Pair(
                     StatsAppItem(
                         packageName = packageName,
@@ -777,16 +889,14 @@ object StatisticsData {
     }
 
     private fun getUserInstalledPackages(pm: PackageManager): Set<String> {
-        val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA) ?: return emptySet()
-        return apps
-            .filter { info ->
-                val flags = info.flags
-                val isSystem = (flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdated = (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                !isSystem || isUpdated
-            }
-            .map { it.packageName }
-            .toSet()
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolves = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+        }
+        return resolves.map { it.activityInfo.packageName }.toSet()
     }
 
 }

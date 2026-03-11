@@ -128,4 +128,7 @@ object AppTypography {
 
     /** Label/Danger (Figma 258:3187) — 위험 배지 9sp Weight 750 */
     val LabelDanger = TextStyle(fontFamily = SuitVariable, fontWeight = FontWeight(750), fontSize = 9.sp, lineHeight = 9.sp)
+
+    /** CategoryTag (Figma 948-3543, DESIGNSYSTEM.md) — 카테고리 태그 SNS/OTT/게임 등 9sp ExtraBold */
+    val CategoryTag = TextStyle(fontFamily = SuitVariable, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, lineHeight = 9.sp)
 }

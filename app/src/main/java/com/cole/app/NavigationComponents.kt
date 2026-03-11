@@ -191,6 +191,7 @@ fun ColeHeaderTitleWithNotification(
     title: String,
     modifier: Modifier = Modifier,
     hasNotification: Boolean = false,
+    showNotificationIcon: Boolean = true,
     onNotificationClick: (() -> Unit)? = null,
 ) {
     Box(
@@ -214,22 +215,29 @@ fun ColeHeaderTitleWithNotification(
                 modifier = Modifier.weight(1f),
             )
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .then(
-                        if (onNotificationClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNotificationClick() }
-                        else Modifier
-                    ),
+                modifier = Modifier.size(36.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    painter = painterResource(
-                        id = if (hasNotification) R.drawable.ic_notification_on else R.drawable.ic_notification_off
-                    ),
-                    contentDescription = "알림",
-                    modifier = Modifier.size(36.dp),
-                    tint = Color.Unspecified,
-                )
+                if (showNotificationIcon) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .then(
+                                if (onNotificationClick != null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onNotificationClick() }
+                                else Modifier
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                id = if (hasNotification) R.drawable.ic_notification_on else R.drawable.ic_notification_off
+                            ),
+                            contentDescription = "알림",
+                            modifier = Modifier.size(36.dp),
+                            tint = Color.Unspecified,
+                        )
+                    }
+                }
             }
         }
     }
