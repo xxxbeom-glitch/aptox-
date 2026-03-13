@@ -23,6 +23,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "cole"
+rootProject.name = "aptox"
 include(":app")
  

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.cole.app"
+    namespace = "com.aptox.app"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -13,7 +13,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.cole.app"
+        applicationId = "com.aptox.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

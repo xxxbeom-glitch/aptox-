@@ -1,0 +1,385 @@
+package com.aptox.app
+
+import com.aptox.app.R
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun AptoxChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fillWidth: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .then(if (fillWidth) Modifier.fillMaxWidth().height(40.dp) else Modifier.size(40.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .then(
+                if (selected) Modifier.background(AppColors.Primary300)
+                else Modifier.background(AppColors.White900).border(1.dp, AppColors.BorderDefault, RoundedCornerShape(6.dp))
+            )
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = label, style = AppTypography.Caption1.copy(color = if (selected) AppColors.TextInvert else AppColors.TextBody, textAlign = TextAlign.Center))
+    }
+}
+
+@Composable
+fun AptoxChipRow(
+    labels: List<String>,
+    selectedIndices: Set<Int>,
+    onChipClick: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    fillWidth: Boolean = false,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = if (fillWidth) Arrangement.spacedBy(8.dp) else Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        labels.forEachIndexed { index, label ->
+            Box(modifier = if (fillWidth) Modifier.weight(1f) else Modifier) {
+                AptoxChip(
+                    label = label,
+                    selected = index in selectedIndices,
+                    onClick = { onChipClick(index) },
+                    fillWidth = fillWidth,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Figma 352-3425, 352-3527: List / Switch Button
+ * - Off: 52x30dp, 회색 pill, 흰 원형 thumb 좌측
+ * - On: 52x30dp, 보라 pill, 흰 원형 thumb 우측 + 체크 아이콘
+ */
+@Composable
+fun AptoxListSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val thumbPosition by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "switch_thumb",
+    )
+    val trackColor = if (checked) AppColors.InteractiveRadioBgSelected else AppColors.Grey250
+    val thumbSize = 22.dp
+    val trackHeight = 30.dp
+    val trackWidth = 52.dp
+    val thumbPadding = 4.dp
+    val maxOffset = trackWidth - thumbSize - thumbPadding * 2
+
+    Box(
+        modifier = modifier
+            .width(trackWidth)
+            .height(trackHeight)
+            .minimumInteractiveComponentSize()
+            .clip(RoundedCornerShape(15.dp))
+            .background(trackColor)
+            .then(
+                if (enabled) Modifier.pointerInput(Unit) { detectTapGestures { onCheckedChange(!checked) } }
+                else Modifier
+            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(start = thumbPadding + maxOffset * thumbPosition)
+                .size(thumbSize)
+                .clip(CircleShape)
+                .background(Color.White),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_switch_check),
+                    contentDescription = "선택됨",
+                    modifier = Modifier.size(14.dp),
+                    tint = AppColors.Primary300,
+                )
+            }
+        }
+    }
+}
+
+/** 라디오 버튼 (원형, 선택 시 내부 점) - SelectionCard 등에서 사용
+ * 터치 영역 28dp, 실제 원 22dp */
+private val RadioButtonTouchSize = 28.dp
+private val RadioButtonCircleSize = 22.dp
+private val RadioButtonInnerDotSize = 8.dp
+
+@Composable
+fun AptoxRadioButton(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Box(
+        modifier = modifier
+            .size(RadioButtonTouchSize)
+            .then(if (enabled) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() } else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(RadioButtonCircleSize)
+                .clip(CircleShape)
+                .then(
+                    if (selected) Modifier.background(AppColors.InteractiveRadioBgSelected)
+                    else Modifier.background(Color.Transparent).border(1.5.dp, AppColors.InteractiveRadioBorderUnselected, CircleShape)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Box(modifier = Modifier.size(RadioButtonInnerDotSize).clip(CircleShape).background(AppColors.InteractiveRadioBorderSelected))
+            }
+        }
+    }
+}
+
+@Composable
+fun AptoxSelectionCard(
+    title: String,
+    description: String,
+    trailingText: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (selected) Modifier.border(1.5.dp, AppColors.Primary300, RoundedCornerShape(12.dp))
+                else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
+            )
+            .background(Color(0xFFFFFFFF))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .padding(horizontal = 16.dp, vertical = 28.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                AptoxRadioButton(selected = selected, onClick = onClick)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = title,
+                        style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = description,
+                        style = AppTypography.BodyMedium.copy(color = AppColors.TextTertiary),
+                    )
+                }
+            }
+            if (trailingText.isNotEmpty()) {
+                Text(
+                    text = trailingText,
+                    style = AppTypography.BodyBold.copy(color = AppColors.TextHighlight, textAlign = TextAlign.End),
+                    modifier = Modifier.width(64.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+data class SelectionCardItem(val title: String, val description: String, val trailingText: String)
+
+/**
+ * Figma: Select / SelectionCard Title Only (609-2622, 609-2623)
+ * - 제목만 있는 컴팩트 선택 카드
+ * - 패딩 16/22dp, border 1.5dp(선택) / 1dp(비선택), 12dp 라운드
+ */
+@Composable
+fun AptoxSelectionCardTitleOnly(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    titleStyle: TextStyle = AppTypography.HeadingH3,
+    titleColor: Color = AppColors.TextPrimary,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (selected) Modifier.border(1.5.dp, AppColors.Primary300, RoundedCornerShape(12.dp))
+                else Modifier.border(1.dp, AppColors.InteractiveRadioBorderUnselected, RoundedCornerShape(12.dp))
+            )
+            .background(Color(0xFFFFFFFF))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .padding(horizontal = 16.dp, vertical = 22.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f),
+            ) {
+                AptoxRadioButton(selected = selected, onClick = onClick)
+                Text(
+                    text = title,
+                    style = titleStyle.copy(color = titleColor),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AptoxSelectionCardTitleOnlyGroup(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit,
+    titleStyle: TextStyle = AppTypography.HeadingH3,
+    titleColor: Color = AppColors.TextPrimary,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        options.forEachIndexed { index, option ->
+            AptoxSelectionCardTitleOnly(
+                title = option,
+                selected = index == selectedIndex,
+                onClick = { onOptionSelected(index) },
+                titleStyle = titleStyle,
+                titleColor = titleColor,
+            )
+        }
+    }
+}
+
+@Composable
+fun AptoxSelectionCardGroup(items: List<SelectionCardItem>, selectedIndex: Int, onItemSelected: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items.forEachIndexed { index, item ->
+            AptoxSelectionCard(title = item.title, description = item.description, trailingText = item.trailingText, selected = index == selectedIndex, onClick = { onItemSelected(index) })
+        }
+    }
+}
+
+// Figma Select/Self Test: Default(414:7249) 흰배경/TextBody/테두리, Select(414:7257) Primary배경/TextInvert
+@Composable
+fun AptoxSelfTestButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(
+                if (selected) AppColors.ButtonPrimaryBgDefault
+                else AppColors.ButtonSecondaryBgDefault
+            )
+            .then(
+                if (selected) Modifier
+                else Modifier.border(0.6.dp, AppColors.ButtonSecondaryBorderDefault, shape)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = AppTypography.BodyMedium.copy(
+                color = if (selected) AppColors.TextInvert else AppColors.TextBody,
+                textAlign = TextAlign.Center,
+            ),
+        )
+    }
+}
+
+@Composable
+fun AptoxSelfTestButtonGroup(
+    options: List<String>,
+    selectedIndex: Int?,
+    onOptionSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        options.forEachIndexed { index, option ->
+            AptoxSelfTestButton(
+                text = option,
+                selected = index == selectedIndex,
+                onClick = { onOptionSelected(index) },
+            )
+        }
+    }
+}
+
+@Composable
+fun AptoxCheckBox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 28.dp,
+) {
+    Icon(
+        painter = painterResource(
+            id = if (checked) R.drawable.ic_checkbox_selected else R.drawable.ic_checkbox_inactive
+        ),
+        contentDescription = if (checked) "선택됨" else "선택 안됨",
+        tint = androidx.compose.ui.graphics.Color.Unspecified,
+        modifier = modifier
+            .size(size)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCheckedChange(!checked) },
+    )
+}

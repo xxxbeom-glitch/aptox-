@@ -1,4 +1,4 @@
-# Cole Cloud Functions - Solapi SMS 인증
+# Aptox Cloud Functions - Solapi SMS 인증
 
 휴대폰 번호로 6자리 인증번호를 SMS 발송하고, 회원가입 및 비밀번호 재설정 시 검증합니다.
 

@@ -1,6 +1,6 @@
 {
-  "name": "cole-functions",
-  "description": "Cole 앱 Cloud Functions - 비밀번호 재설정 인증코드 발송",
+  "name": "aptox-functions",
+  "description": "aptox 앱 Cloud Functions - 비밀번호 재설정 인증코드 발송",
   "scripts": {
     "seed-badges": "node seed-badges.js",
     "serve": "firebase emulators:start --only functions",

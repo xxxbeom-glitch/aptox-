@@ -1,10 +1,10 @@
-# Cole 디자인 시스템
+# Aptox 디자인 시스템
 
 ---
 
 ## 통계 화면 컴포넌트 (Statistics Screen)
 
-> Figma cole 파일 기준. 통계 화면 전체 리뉴얼용 에셋.
+> Figma 디자인 파일 기준. 통계 화면 전체 리뉴얼용 에셋.
 
 ### 1. 날짜 네비게이션 좌/우 아이콘
 
@@ -84,19 +84,19 @@ IcoNavRight(enabled: Boolean = true, modifier, tint, size = 22.dp)
 
 **Figma:** 352-3425 (Off), 352-3527 (On)
 
-### ColeListSwitch
+### AptoxListSwitch
 - **사양:** 52×30dp pill 형태
 - **Off:** 회색 트랙(Grey250 `#E8E8E8`), 흰색 원형 thumb 좌측
 - **On:** 보라색 트랙(Primary300 `#6C54DD`), 흰색 원형 thumb 우측, **체크 아이콘** 포함
 - **체크 아이콘:** `ic_switch_check.xml` (16×16dp, Primary300)
 
 ### 사용처
-- `ColeSelectionCard` – 선택 카드 리스트
-- `ColeSelectionCardTitleOnly` – 제목만 있는 선택 카드
+- `AptoxSelectionCard` – 선택 카드 리스트
+- `AptoxSelectionCardTitleOnly` – 제목만 있는 선택 카드
 
 ### API
 ```kotlin
-ColeListSwitch(
+AptoxListSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -104,7 +104,7 @@ ColeListSwitch(
 )
 ```
 
-### ColeRadioButton
+### AptoxRadioButton
 - **용도:** 원형 라디오 (SelectionCard 외 단일 선택 UI)
 - **사양:** 28×28dp, 선택 시 내부 10dp 점
 

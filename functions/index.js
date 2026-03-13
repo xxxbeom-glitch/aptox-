@@ -95,7 +95,7 @@ exports.sendSignUpVerificationSms = functions.https.onCall(async (data, context)
   });
 
   try {
-    await sendSms(normalizedPhone, `[Cole] 회원가입 인증번호: ${code}\n${CODE_EXPIRY_MINUTES}분 안에 입력해주세요.`);
+    await sendSms(normalizedPhone, `[aptox] 회원가입 인증번호: ${code}\n${CODE_EXPIRY_MINUTES}분 안에 입력해주세요.`);
   } catch (e) {
     const errMsg = e?.errorMessage || e?.message || String(e);
     const errCode = e?.errorCode || e?.code || e?.statusCode || "";
@@ -219,7 +219,7 @@ exports.sendPasswordResetSms = functions.https.onCall(async (data, context) => {
   });
 
   try {
-    await sendSms(normalizedPhone, `[Cole] 비밀번호 재설정 인증번호: ${code}\n${CODE_EXPIRY_MINUTES}분 안에 입력해주세요.`);
+    await sendSms(normalizedPhone, `[aptox] 비밀번호 재설정 인증번호: ${code}\n${CODE_EXPIRY_MINUTES}분 안에 입력해주세요.`);
   } catch (e) {
     const errMsg = e?.errorMessage || e?.message || String(e);
     const errCode = e?.errorCode || e?.code || e?.statusCode || "";
@@ -628,7 +628,7 @@ exports.submitBugReport = functions.https.onCall(async (data, context) => {
       await transporter.sendMail({
         from: emailUser,
         to: BUG_REPORT_EMAIL_TO,
-        subject: "[Cole] 버그 신고",
+        subject: "[aptox] 버그 신고",
         text: trimmed,
         replyTo: context.auth?.token?.email || undefined,
       });

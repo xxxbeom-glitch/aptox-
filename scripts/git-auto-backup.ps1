@@ -1,4 +1,4 @@
-# cole 프로젝트 30분마다 Git 자동 백업 스크립트
+# aptox 프로젝트 30분마다 Git 자동 백업 스크립트
 $ErrorActionPreference = "SilentlyContinue"
 $projectPath = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $projectPath

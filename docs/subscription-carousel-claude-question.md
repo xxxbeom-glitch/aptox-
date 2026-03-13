@@ -45,13 +45,13 @@ Android Jetpack Compose 앱에서 **구독 플랜 카드 캐러셀**(HorizontalP
 아래 파일들을 첨부하여 질문한다:
 
 ```
-1. app/src/main/java/com/cole/app/SubscriptionGuideScreen.kt
+1. app/src/main/java/com/aptox/app/SubscriptionGuideScreen.kt
    - 구독 화면 전체 및 SubscriptionPlanCard 구현
 
-2. app/src/main/java/com/cole/app/AppTypography.kt
+2. app/src/main/java/com/aptox/app/AppTypography.kt
    - 폰트 스타일 참고용 (SuitVariable, AppTypography)
 
-3. app/src/main/java/com/cole/app/AppColors.kt
+3. app/src/main/java/com/aptox/app/AppColors.kt
    - 색상 정의 (Primary300, TextInvert 등)
 
 4. (선택) Figma MA-01 구독 화면 스크린샷 또는 디자인 링크

@@ -15,7 +15,7 @@
 local.properties
 crash_log.txt
 crash_detail.txt
-cole_variables.json
+aptox_variables.json
 color_va.json
 
 # Firebase Functions

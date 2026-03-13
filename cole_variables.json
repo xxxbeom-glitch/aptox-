@@ -1,0 +1,1312 @@
+[
+  {
+    "변수 컬렉션": {
+      "modes": {
+        "Mode 1": {
+          "Grey 50": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#fafafa"
+          },
+          "Grey 100": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#f5f5f5"
+          },
+          "Grey 150": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#f0f0f0"
+          },
+          "Grey 200": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#eeeeee"
+          },
+          "Grey 250": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e8e8e8"
+          },
+          "Grey 300": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e0e0e0"
+          },
+          "Grey 350": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#d6d6d6"
+          },
+          "Grey 400": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#c2c2c2"
+          },
+          "Grey 450": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#a3a3a3"
+          },
+          "Grey 500": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#858585"
+          },
+          "Grey 550": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#666666"
+          },
+          "Text": {
+            "Primary": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 900}"
+            },
+            "Body": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 750}"
+            },
+            "Secondary": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey  700}"
+            },
+            "Tertiary": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 650}"
+            },
+            "Caption": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 600}"
+            },
+            "Disclaimer": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 500}"
+            },
+            "Placeholder": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 500}"
+            },
+            "Disabled": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 400}"
+            },
+            "Invert": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{White 900}"
+            },
+            "Highlight": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Primary 300}"
+            },
+            "Error": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Red 500}"
+            }
+          },
+          "Grey 600": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#4d4d4d"
+          },
+          "Grey 650": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#333333"
+          },
+          "Grey  700": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#262626"
+          },
+          "Grey 750": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#1f1f1f"
+          },
+          "Grey 800": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#141414"
+          },
+          "Grey 850": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#0a0a0a"
+          },
+          "Grey 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#000000"
+          },
+          "White 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#ffffff"
+          },
+          "Border": {
+            "Default": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 350}"
+            },
+            "Divider": {
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 550}"
+            }
+          },
+          "Interactive": {
+            "Tab": {
+              "Unselected": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 200}"
+              },
+              "Selected": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{White 900}"
+              },
+              "Tab BG": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 200}"
+              },
+              "Text": {
+                "Selected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 750}"
+                },
+                "Unselected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 500}"
+                }
+              }
+            },
+            "Radio": {
+              "BG": {
+                "Selected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Primary 300}"
+                },
+                "Unselected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 400}"
+                }
+              },
+              "Border": {
+                "Selected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{White 900}"
+                },
+                "Unselected": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                }
+              }
+            },
+            "Check Box": {
+              "BG": {
+                "Checked": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Primary 300}"
+                },
+                "Unchecked": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{White 900}"
+                }
+              },
+              "Border": {
+                "Unchecked": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                },
+                "Check": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{White 900}"
+                }
+              }
+            },
+            "Toggle": {
+              "BG": {
+                "On": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$value": "#ffffff"
+                },
+                "Off": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$value": "#ffffff"
+                },
+                "Handle": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$value": "#ffffff"
+                }
+              }
+            }
+          },
+          "Chart": {
+            "Label": {
+              "Label": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#ffffff"
+              }
+            },
+            "Guideline": {
+              "Guideline": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#ffffff"
+              },
+              "$scopes": [
+                "ALL_SCOPES"
+              ],
+              "$type": "color",
+              "$libraryName": "",
+              "$collectionName": "변수 컬렉션",
+              "$value": "{Grey 350}"
+            },
+            "Bar": {
+              "Default": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$value": "#ffffff"
+              }
+            },
+            "Track": {
+              "Background": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 200}"
+              },
+              "Fill": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Primary 300}"
+              },
+              "Dot - Active": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Primary 500}"
+              },
+              "Dot  - Inactive": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 350}"
+              }
+            },
+            "Handle": {
+              "Border": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 250}"
+              },
+              "BG": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{White 900}"
+              },
+              "Arrow": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 650}"
+              }
+            },
+            "Level": {
+              "Bad 1": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Red 500}"
+              },
+              "Bad 2": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Red 400}"
+              },
+              "Good 2": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Blue 400}"
+              },
+              "Good 3": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Blue 300}"
+              },
+              "Excellent 1": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Green 500}"
+              },
+              "Excellent 2": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Green 400}"
+              },
+              "Excellent 3": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Green 300}"
+              },
+              "Bad 3": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Red 300}"
+              },
+              "Warning 1": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Orange 500}"
+              },
+              "Warning 2": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Orange 400}"
+              },
+              "Warning 3": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Orange 300}"
+              },
+              "Normal 1": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Yellow 500}"
+              },
+              "Normal 2": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Yellow 400}"
+              },
+              "Normal 3": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Yellow 300}"
+              },
+              "Good 1": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Blue 500}"
+              }
+            }
+          },
+          "Form": {
+            "Input": {
+              "BG": {
+                "Error": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 150}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                },
+                "Focus": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 100}"
+                },
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 150}"
+                }
+              }
+            },
+            "Border": {
+              "Focus": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Primary 300}"
+              }
+            },
+            "Text": {
+              "Placeholder": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 450}"
+              },
+              "Active": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 750}"
+              },
+              "Error": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Red 300}"
+              },
+              "Label": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey  700}"
+              },
+              "Disabled": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 400}"
+              },
+              "Value": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 750}"
+              },
+              "Helper": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 600}"
+              }
+            }
+          },
+          "Primary 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#261d4d"
+          },
+          "Primary 800": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#312663"
+          },
+          "Primary 700": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#413285"
+          },
+          "Primary 600": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#513fa6"
+          },
+          "Primary 500": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#5643b1"
+          },
+          "Primary 400": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#614cc7"
+          },
+          "Primary 300": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#6c54dd"
+          },
+          "Primary 200": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e9ebf8"
+          },
+          "Primary 100": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e9e5fa"
+          },
+          "Primary 50": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#f0eefc"
+          },
+          "Surface": {
+            "Background": {
+              "Background": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 100}"
+              },
+              "Card": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{White 900}"
+              },
+              "Bottom Sheet": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 100}"
+              },
+              "Info-Box": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 150}"
+              },
+              "Overlay": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 900}"
+              }
+            },
+            "Border": {
+              "Default": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 250}"
+              },
+              "Info-Box": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 300}"
+              },
+              "Divider": {
+                "$scopes": [
+                  "ALL_SCOPES"
+                ],
+                "$type": "color",
+                "$libraryName": "",
+                "$collectionName": "변수 컬렉션",
+                "$value": "{Grey 250}"
+              }
+            }
+          },
+          "Button": {
+            "Secondary": {
+              "Text": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 600}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 400}"
+                }
+              },
+              "BG": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{White 900}"
+                },
+                "Hover": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 200}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 250}"
+                }
+              },
+              "Border": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                },
+                "Hover": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 400}"
+                }
+              }
+            },
+            "Ghost": {
+              "Text": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 600}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 350}"
+                },
+                "Hover": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 650}"
+                }
+              },
+              "BG": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 100}"
+                },
+                "Hover": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 150}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 100}"
+                }
+              }
+            },
+            "Primary": {
+              "Text": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{White 900}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 400}"
+                }
+              },
+              "BG": {
+                "Default": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Primary 300}"
+                },
+                "Pressed": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Primary 400}"
+                },
+                "Disabled": {
+                  "$scopes": [
+                    "ALL_SCOPES"
+                  ],
+                  "$type": "color",
+                  "$libraryName": "",
+                  "$collectionName": "변수 컬렉션",
+                  "$value": "{Grey 250}"
+                }
+              }
+            }
+          },
+          "Blue 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#111346"
+          },
+          "Blue 800": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#16185a"
+          },
+          "Blue 700": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#1d2079"
+          },
+          "Blue 600": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#252997"
+          },
+          "Blue 500": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#272ba1"
+          },
+          "Blue 400": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#2c31b5"
+          },
+          "Blue 300": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#3136c9"
+          },
+          "Blue 200": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#bfc1ee"
+          },
+          "Blue 100": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e0e1f7"
+          },
+          "Green 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#153832"
+          },
+          "Green 800": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#1b4841"
+          },
+          "Green 700": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#245f56"
+          },
+          "Green 600": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#2d776c"
+          },
+          "Green 500": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#307f73"
+          },
+          "Green 400": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#368f82"
+          },
+          "Green 300": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#3c9f90"
+          },
+          "Green 200": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#c3e1dd"
+          },
+          "Green 100": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e2f1ee"
+          },
+          "Red 900": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#4f1f1f"
+          },
+          "Red 800": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#662828"
+          },
+          "Red 700": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#883535"
+          },
+          "Red 600": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#aa4343"
+          },
+          "Red 500": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#b64747"
+          },
+          "Red 400": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#cc5050"
+          },
+          "Red 300": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#e35959"
+          },
+          "Red 200": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#f6cccc"
+          },
+          "Red 100": {
+            "$scopes": [
+              "ALL_SCOPES"
+            ],
+            "$type": "color",
+            "$value": "#fbe6e6"
+          }
+        }
+      }
+    }
+  }
+]

@@ -71,7 +71,7 @@ if ($IssueContent -ne "") {
 
 ---
 *생성 시각: $(Get-Date -Format "yyyy년 MM월 dd일 HH:mm")*
-*프로젝트: cole (디지털 디톡스 앱)*
+*프로젝트: aptox (디지털 디톡스 앱)*
 *환경: Android / Kotlin + Jetpack Compose*
 "@ | Out-File -FilePath "$tempDir\issue.md" -Encoding UTF8
     Write-Host "⚠️  이슈 내용 없음 → 기본 템플릿으로 생성" -ForegroundColor Yellow

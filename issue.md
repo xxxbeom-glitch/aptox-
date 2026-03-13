@@ -30,12 +30,12 @@
 
 ## 관련 파일
 
-- `app/src/main/java/com/cole/app/AddAppScreens.kt` - 앱 선택 바텀시트, queryIntentActivities로 런처 앱 목록 조회
-- `app/src/main/java/com/cole/app/StatisticsData.kt` - loadAppUsage, getUserInstalledPackages, hasUsageAccess 의존
-- `app/src/main/java/com/cole/app/usage/UsageStatsLocalRepository.kt` - getAppUsageForRangeBlocking, DB 기반 앱별 사용량
-- `app/src/main/java/com/cole/app/AiAppCategoryClassificationScreen.kt` - getInstalledApplications, queryIntentActivities
+- `app/src/main/java/com/aptox/app/AddAppScreens.kt` - 앱 선택 바텀시트, queryIntentActivities로 런처 앱 목록 조회
+- `app/src/main/java/com/aptox/app/StatisticsData.kt` - loadAppUsage, getUserInstalledPackages, hasUsageAccess 의존
+- `app/src/main/java/com/aptox/app/usage/UsageStatsLocalRepository.kt` - getAppUsageForRangeBlocking, DB 기반 앱별 사용량
+- `app/src/main/java/com/aptox/app/AiAppCategoryClassificationScreen.kt` - getInstalledApplications, queryIntentActivities
 - `app/src/main/AndroidManifest.xml` - queries, QUERY_ALL_PACKAGES 권한 (Android 11+ 패키지 가시성)
-- `app/src/main/java/com/cole/app/usage/UsageStatsSyncWorker.kt` - 일별 사용량 DB 동기화 (미동기화 시 통계 앱 목록 비어 있음)
+- `app/src/main/java/com/aptox/app/usage/UsageStatsSyncWorker.kt` - 일별 사용량 DB 동기화 (미동기화 시 통계 앱 목록 비어 있음)
 
 ## 예상 원인
 
@@ -53,5 +53,5 @@
 
 ---
 *생성 시각: 2026년 03월 11일 21:50*
-*프로젝트: cole (디지털 디톡스 앱)*
+*프로젝트: aptox (디지털 디톡스 앱)*
 *환경: Android / Kotlin + Jetpack Compose*
