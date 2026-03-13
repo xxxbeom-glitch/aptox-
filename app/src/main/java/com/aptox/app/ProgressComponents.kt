@@ -42,6 +42,7 @@ import kotlin.math.roundToInt
 
 /**
  * 온보딩/자가테스트 화면에서 사용하는 프로그레스 바.
+ * Figma 442-2755: track Grey550 10%, fill TextHighlight, height 4dp
  *
  * @param progress 0f ~ 1f 사이의 진행률
  * @param animated 진행률 변경 시 애니메이션 여부
@@ -62,14 +63,14 @@ fun AptoxOnboardingProgressBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(6.dp)
+            .height(4.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(AppColors.Grey550.copy(alpha = 0.1f)),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(animatedProgress)
-                .height(6.dp)
+                .height(4.dp)
                 .clip(RoundedCornerShape(999.dp))
                 .background(AppColors.TextHighlight),
         )

@@ -11,9 +11,16 @@
 
     <!-- Figma AA-01 앱 차단 오버레이 -->
     <color name="block_overlay_bg">#FF141414</color>
+    <!-- Figma 1136-6361 일일사용량 제한 오버레이 -->
+    <color name="block_overlay_daily_bg">#FF0A0A0A</color>
+    <color name="block_overlay_daily_btn_bg">#FF614CC7</color>
+    <color name="block_overlay_daily_btn_text">#FFE9E5FA</color>
     <color name="block_overlay_text_primary">#FFF5F5F5</color>
     <color name="block_overlay_text_remaining">#FFE35959</color>
     <color name="block_overlay_btn_bg">#FFF5F5F5</color>
     <color name="block_overlay_btn_text">#FF1F1F1F</color>
     <color name="block_overlay_btn_text_disabled">#FFC2C2C2</color>
+    <!-- Figma AA-01 Ghost 버튼 (홈으로 이동) -->
+    <color name="block_overlay_ghost_bg">#FFF5F5F5</color>
+    <color name="block_overlay_ghost_text">#FF333333</color>
 </resources>

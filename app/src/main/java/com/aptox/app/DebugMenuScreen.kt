@@ -107,7 +107,9 @@ sealed class DebugScreen(val category: String, val label: String) {
     data object Login : DebugScreen("인증/온보딩", "Login")
     data object Onboarding : DebugScreen("인증/온보딩", "온보딩")
     data object SelfTest : DebugScreen("인증/온보딩", "자가테스트")
+    data object SelfTestVer2 : DebugScreen("인증/온보딩", "자가테스트 진단 ver2")
     data object SelfTestLoading : DebugScreen("인증/온보딩", "자가테스트 로딩")
+    data object UsagePatternAnalysis : DebugScreen("인증/온보딩", "사용패턴 분석 안내 (Figma 1127-5788)")
     data object SelfTestResult : DebugScreen("인증/온보딩", "자가테스트 결과")
     // 앱 제한
     data object AddAppAA01 : DebugScreen("앱 제한", "AA-01: 제한 방법 선택")
@@ -153,6 +155,8 @@ sealed class DebugScreen(val category: String, val label: String) {
     data object UsageStatsTest : DebugScreen("테스트", "앱별 사용시간 (UsageStats)")
     data object AppMonitorTest : DebugScreen("테스트", "앱 모니터 서비스 (시작/중지)")
     data object BlockOverlayTest : DebugScreen("테스트", "차단 오버레이 테스트")
+    /** Figma 1136-6361: 일일사용량 제한 - 사용 시간 전부 소진 시 오버레이 (미리보기 전용) */
+    data object DailyUsageLimitOverlayPreview : DebugScreen("테스트", "일일사용량 제한 오버레이 (Figma 1136-6361)")
 }
 
 @Composable
@@ -175,7 +179,9 @@ private fun DebugScreenPreview(
             onBackClick = onBack,
             onComplete = { onBack() },
         )
+        DebugScreen.SelfTestVer2 -> SelfTestScreenVer2(onBack = onBack)
         DebugScreen.SelfTestLoading -> SelfTestLoadingScreen(onFinish = onBack)
+        DebugScreen.UsagePatternAnalysis -> DebugUsagePatternAnalysisPreview(onBack = onBack)
         DebugScreen.SelfTestResult -> SelfTestResultScreen(
             resultType = SelfTestResultType.CAUTION,
             onStartClick = onBack,
@@ -380,6 +386,7 @@ private fun DebugScreenPreview(
         DebugScreen.UsageStatsTest -> UsageStatsTestScreen(onBack = onBack)
         DebugScreen.AppMonitorTest -> AppMonitorTestScreen(onBack = onBack)
         DebugScreen.BlockOverlayTest -> BlockOverlayTestScreen(onBack = onBack)
+        DebugScreen.DailyUsageLimitOverlayPreview -> DailyUsageLimitOverlayPreviewScreen(onBack = onBack)
         else -> DebugPlaceholderScreen(screen = screen, onBack = onBack)
     }
 }
@@ -388,6 +395,22 @@ private fun DebugScreenPreview(
 private fun DebugSplashPreview(onBack: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         SplashScreen(onFinish = onBack)
+        AptoxGhostButton(
+            text = "돌아가기",
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .widthIn(max = 120.dp),
+        )
+    }
+}
+
+@Composable
+private fun DebugUsagePatternAnalysisPreview(onBack: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        UsagePatternAnalysisScreen(userName = "아영", onFinish = onBack)
         AptoxGhostButton(
             text = "돌아가기",
             onClick = onBack,
@@ -657,7 +680,7 @@ private fun DebugScreenListSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf(DebugScreen.SelfTest, DebugScreen.SelfTestLoading, DebugScreen.SelfTestResult).forEach { screen ->
+            listOf(DebugScreen.SelfTest, DebugScreen.SelfTestLoading, DebugScreen.UsagePatternAnalysis, DebugScreen.SelfTestResult).forEach { screen ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -689,7 +712,9 @@ private fun DebugScreenListSection(
             DebugScreen.AppIconTest,
             DebugScreen.Onboarding,
             DebugScreen.SelfTest,
+            DebugScreen.SelfTestVer2,
             DebugScreen.SelfTestLoading,
+            DebugScreen.UsagePatternAnalysis,
             DebugScreen.SelfTestResult,
             DebugScreen.AddAppFlowHost,
             DebugScreen.MainFlow,
@@ -697,6 +722,7 @@ private fun DebugScreenListSection(
             DebugScreen.UsageStatsTest,
             DebugScreen.AppMonitorTest,
             DebugScreen.BlockOverlayTest,
+            DebugScreen.DailyUsageLimitOverlayPreview,
         )
         val grouped = allScreens.groupBy { it.category }
 

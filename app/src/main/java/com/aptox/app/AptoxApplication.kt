@@ -32,6 +32,7 @@ class AptoxApplication : Application() {
                 if (map.isNotEmpty()) {
                     AppMonitorService.start(context, map)
                 }
+                DailyUsageAlarmScheduler.scheduleResetWarningIfNeeded(context)
             } catch (e: Throwable) {
                 Log.e(TAG, "AppMonitor 시작 실패", e)
             }

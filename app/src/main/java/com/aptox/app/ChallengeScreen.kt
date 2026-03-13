@@ -297,7 +297,7 @@ private fun BadgeGridItem(
                     Image(
                         painter = painterResource(R.drawable.ico_lock_challange),
                         contentDescription = null,
-                        modifier = Modifier.size(BadgeIconSize),
+                        modifier = Modifier.size(width = 18.dp, height = 22.dp),
                         contentScale = ContentScale.Fit,
                     )
                 }

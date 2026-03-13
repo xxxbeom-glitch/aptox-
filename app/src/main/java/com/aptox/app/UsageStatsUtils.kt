@@ -12,6 +12,40 @@ import java.util.Calendar
  */
 object UsageStatsUtils {
 
+    /**
+     * 일일 사용량 제한용: 자정(00:00) 리셋.
+     * baseline이 오늘 이전이면 오늘 00:00을 사용해 당일 사용량만 카운트.
+     * 앱이 백그라운드/종료 상태에서 자정 넘어갔을 때도 리셋 적용.
+     */
+    @JvmStatic
+    fun getEffectiveBaselineForDailyUsage(baselineTimeMs: Long): Long {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayMidnight = cal.timeInMillis
+        return maxOf(baselineTimeMs, todayMidnight)
+    }
+
+    /**
+     * 일일 사용량 제한용 사용량(ms). 자정 기준 리셋 적용.
+     */
+    @JvmStatic
+    fun getDailyUsageLimitMs(
+        usm: UsageStatsManager,
+        packageName: String,
+        baselineTimeMs: Long,
+        packagesWithVisibleWindow: Set<String>? = null,
+    ): Long {
+        val effectiveBaseline = getEffectiveBaselineForDailyUsage(baselineTimeMs)
+        return getUsageSinceBaselineMs(usm, packageName, effectiveBaseline, packagesWithVisibleWindow)
+    }
+
+    /** 자정 이전에 시작해 자정을 넘긴 세션을 잡기 위한 쿼리 구간 확장(25시간) */
+    private const val PRE_BASELINE_QUERY_MS = 25L * 60 * 60 * 1000
+
     @JvmStatic
     fun getUsageSinceBaselineMs(
         usm: UsageStatsManager,
@@ -23,7 +57,10 @@ object UsageStatsUtils {
             return getTodayUsageMsLegacy(usm, packageName)
         }
         val now = System.currentTimeMillis()
-        val events = usm.queryEvents(baselineTimeMs, now) ?: return 0
+        // 자정 넘어가는 엣지케이스: 23:50에 앱 켜고 00:20까지 사용 시, 00:00~00:20 구간만 카운트해야 함.
+        // queryEvents(baseline, now)만 쓰면 23:50의 MOVE_TO_FOREGROUND를 못 보므로, 구간을 과거로 확장
+        val queryStart = maxOf(0, baselineTimeMs - PRE_BASELINE_QUERY_MS)
+        val events = usm.queryEvents(queryStart, now) ?: return 0
         val hasVisibleWindow = packagesWithVisibleWindow?.contains(packageName) == true
 
         var totalMs = 0L

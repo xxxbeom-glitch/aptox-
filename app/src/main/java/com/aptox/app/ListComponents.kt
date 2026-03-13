@@ -465,6 +465,69 @@ fun SimpleTextRow(
     }
 }
 
+/**
+ * Figma 1022-3824: 기기 알림 단독 카드
+ * - 제목: 기기 알림 (BodyBold 15sp)
+ * - 부제: 알림을 받으려면 기기 알림 허용이 필요해요 (Caption1 12sp)
+ * - 우측: 배지 텍스트 + chevron 아이콘
+ */
+@Composable
+fun DeviceNotificationCard(
+    badgeText: String,
+    badgeAllowed: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.SurfaceBackgroundCard)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 18.dp, vertical = 22.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = "기기 알림",
+                    style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+                )
+                Text(
+                    text = "알림을 받으려면 기기 알림 허용이 필요해요",
+                    style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = badgeText,
+                    style = AppTypography.Caption1.copy(
+                        color = if (badgeAllowed) AppColors.TextCaption else AppColors.Red300,
+                    ),
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = AppColors.TextPrimary,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsListCard(
     modifier: Modifier = Modifier,

@@ -1,13 +1,10 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const https = require("https");
-const nodemailer = require("nodemailer");
 const { SolapiMessageService } = require("solapi");
 const Anthropic = require("@anthropic-ai/sdk").default;
 
 admin.initializeApp();
-
-const BUG_REPORT_EMAIL_TO = "psblove88@gmail.com";
 
 const VERIFICATION_CODES_COLLECTION = "verificationCodes";
 const CODE_EXPIRY_MINUTES = 5;
@@ -594,8 +591,7 @@ exports.callClaude = functions.https.onCall(async (data, context) => {
 });
 
 /**
- * 버그 신고 제출 - Firestore 저장 + psblove88@gmail.com 으로 이메일 발송
- * Gmail SMTP: firebase functions:config:set bugreport.email_user="psblove88@gmail.com" bugreport.email_pass="앱비밀번호"
+ * 버그 신고 제출 - Firestore에만 저장
  */
 exports.submitBugReport = functions.https.onCall(async (data, context) => {
   const content = data?.content;
@@ -608,35 +604,17 @@ exports.submitBugReport = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "내용을 입력해주세요.");
   }
 
-  const db = admin.firestore();
-  const docRef = await db.collection("bugReports").add({
-    content: trimmed,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    userId: context.auth?.uid || null,
-  });
-
-  const config = functions.config().bugreport || {};
-  const emailUser = config.email_user || process.env.BUGREPORT_EMAIL_USER;
-  const emailPass = config.email_pass || process.env.BUGREPORT_EMAIL_PASS;
-
-  if (emailUser && emailPass) {
-    try {
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: { user: emailUser, pass: emailPass },
-      });
-      await transporter.sendMail({
-        from: emailUser,
-        to: BUG_REPORT_EMAIL_TO,
-        subject: "[aptox] 버그 신고",
-        text: trimmed,
-        replyTo: context.auth?.token?.email || undefined,
-      });
-    } catch (e) {
-      console.error("submitBugReport 이메일 발송 실패:", e.message);
-    }
-  } else {
-    console.warn("버그 신고: 이메일 설정 없음. firebase functions:config:set bugreport.email_user=... bugreport.email_pass=...");
+  let docRef;
+  try {
+    const db = admin.firestore();
+    docRef = await db.collection("bugReports").add({
+      content: trimmed,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      userId: context.auth?.uid || null,
+    });
+  } catch (e) {
+    console.error("submitBugReport Firestore 저장 실패:", e.message);
+    throw new functions.https.HttpsError("internal", "저장 실패: " + (e.message || "알 수 없는 오류"));
   }
 
   return { success: true, id: docRef.id };

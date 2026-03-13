@@ -189,11 +189,11 @@ public class AppMonitorService extends Service {
                 Log.d(TAG, "시간 지정 차단 종료: " + pkg);
             }
         } else {
-            // 일일 사용량 차단
+            // 일일 사용량 차단 (자정 00시 기준 리셋)
             int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
             long baselineMs = restriction != null ? restriction.getBaselineTimeMs() : 0L;
             java.util.Set<String> visiblePkgs = new AppVisibilityRepository(this).getPackagesWithVisibleWindows();
-            long todayUsageMs = UsageStatsUtils.getUsageSinceBaselineMs(usm, pkg, baselineMs, visiblePkgs);
+            long todayUsageMs = UsageStatsUtils.getDailyUsageLimitMs(usm, pkg, baselineMs, visiblePkgs);
             // UsageStats는 배치 처리되어 1~5분 지연. 현재 포그라운드 세션 시간을 보정에 추가
             Long startMs = foregroundStartTimeMap.get(pkg);
             if (pkg.equals(lastKnownForegroundPkg) && startMs != null) {
@@ -206,6 +206,21 @@ public class AppMonitorService extends Service {
             }
             long limitMs = limitMinutes * 60L * 1000L;
             shouldBlock = todayUsageMs >= limitMs;
+
+            // 푸시 알림 (해당 앱 사용 중일 때만)
+            if (pkg.equals(lastKnownForegroundPkg) && restriction != null) {
+                String appName = restriction.getAppName();
+                long fiveMinBeforeMs = limitMs - 5L * 60 * 1000;
+                if (todayUsageMs >= limitMs) {
+                    if (!DailyUsageNotificationHelper.INSTANCE.hasFiredLimitReachedToday(this, pkg)) {
+                        DailyUsageNotificationHelper.INSTANCE.sendLimitReachedNotification(this, appName, pkg);
+                    }
+                } else if (todayUsageMs >= fiveMinBeforeMs && todayUsageMs < limitMs) {
+                    if (!DailyUsageNotificationHelper.INSTANCE.hasFiredFiveMinWarningToday(this, pkg)) {
+                        DailyUsageNotificationHelper.INSTANCE.sendFiveMinWarningNotification(this, appName, pkg);
+                    }
+                }
+            }
         }
 
         if (shouldBlock) {
@@ -213,6 +228,8 @@ public class AppMonitorService extends Service {
             if (!BlockOverlayService.isRunning) {
                 Intent i = new Intent(this, BlockOverlayService.class);
                 i.putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, pkg);
+                i.putExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS,
+                    restriction != null ? restriction.getBlockUntilMs() : 0L);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(i);
                 } else {

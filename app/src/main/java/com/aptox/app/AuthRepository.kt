@@ -267,6 +267,39 @@ class AuthRepository(
         private const val TAG = "AuthRepository"
     }
 
+    /** 현재 로그인된 사용자 표시용 정보 */
+    data class CurrentUserInfo(
+        val uid: String,
+        val displayText: String,
+        val providerLabel: String,
+    )
+
+    /** 현재 로그인된 사용자 정보 (Firestore users에서 provider, nickname, email 조회) */
+    suspend fun getCurrentUserInfo(): CurrentUserInfo? = runCatching {
+        val user = auth.currentUser ?: return@runCatching null
+        val doc = runCatching { firestore.collection("users").document(user.uid).get().await() }.getOrNull()
+        val provider = doc?.getString("provider") ?: "계정"
+        val nickname = doc?.getString("nickname")?.takeIf { it.isNotBlank() }
+        val email = doc?.getString("email")?.takeIf { it.isNotBlank() } ?: user.email
+        val displayText = (nickname ?: email ?: user.displayName)?.takeIf { it.isNotBlank() } ?: "로그인됨"
+        val providerLabel = when (provider) {
+            "kakao" -> "카카오"
+            "naver" -> "네이버"
+            "google" -> "구글"
+            else -> provider
+        }
+        CurrentUserInfo(uid = user.uid, displayText = displayText, providerLabel = providerLabel)
+    }.getOrNull()
+
+    /** 로그아웃 (Firebase Auth + 카카오 세션) */
+    suspend fun signOut() = runCatching {
+        try {
+            UserApiClient.instance.logout {}
+        } catch (_: Exception) { }
+        auth.signOut()
+        Log.d(TAG, "로그아웃 완료")
+    }
+
     /** 카카오 사용자 정보 조회 */
     private suspend fun getUserKakaoInfo(): Map<String, String>? =
         suspendCancellableCoroutine { cont ->

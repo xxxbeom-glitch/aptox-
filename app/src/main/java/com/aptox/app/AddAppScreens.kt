@@ -1514,6 +1514,7 @@ fun AddAppFlowHost(
                     AppMonitorService.stop(context)
                     AppMonitorService.start(context, map)
                 }
+                DailyUsageAlarmScheduler.scheduleResetWarningIfNeeded(context)
             }
             AddAppDailyLimitScreen05(
                 appName = selectedAppNames.joinToString(", ").ifEmpty { "앱" },
@@ -1633,6 +1634,7 @@ fun AddAppFlowHost(
             AppMonitorService.stop(context)
             AppMonitorService.start(context, map)
         }
+        DailyUsageAlarmScheduler.scheduleResetWarningIfNeeded(context)
     }
     onComplete()
 },

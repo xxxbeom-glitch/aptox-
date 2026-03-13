@@ -129,7 +129,7 @@ fun AptoxBottomNavBar(
 // ─────────────────────────────────────────────────────────────────────────────
 // AptoxHeaderHome
 // Figma: Header - Home (로고 + 알림)
-// 56dp, 좌측 로고 83x32, 우측 알림 36x36(아이콘 24x24)
+// 56dp, 좌측 로고 93x36 (Figma), 우측 알림 36x36(아이콘 24x24)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -156,7 +156,7 @@ fun AptoxHeaderHome(
                 painter = logo,
                 contentDescription = "aptox",
                 tint = Color.Unspecified,
-                modifier = Modifier.width(73.dp).height(28.dp), // 83:32 비율 → 73:28
+                modifier = Modifier.width(93.dp).height(36.dp), // Figma: 93x36 aptox 로고
             )
             Box(
                 modifier = Modifier

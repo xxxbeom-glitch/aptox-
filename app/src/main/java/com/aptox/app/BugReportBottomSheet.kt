@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 
 private const val BUG_REPORT_MAX_LENGTH = 1000
@@ -31,11 +32,15 @@ fun BugReportBottomSheet(
     onSubmit: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     BaseBottomSheet(
         title = "버그 신고",
         onDismissRequest = onDismiss,
-        onPrimaryClick = { onSubmit(text) },
+        onPrimaryClick = {
+            focusManager.clearFocus()
+            onSubmit(text)
+        },
         primaryButtonText = "등록",
         secondaryButtonText = "취소",
         onSecondaryClick = onDismiss,

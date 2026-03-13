@@ -55,28 +55,51 @@ private const val CHECK_DURATION_MS = 250
 
 /**
  * 3 dot 웨이브 → 합쳐짐 → 체크 아이콘 애니메이션.
+ * @param triggerCheck true가 되면 체크 모션으로 전환 후 onComplete 호출. null이면 자동 시작(기존 동작).
  * @param onComplete 체크 애니메이션 완료 시 호출 (null이면 호출 안 함)
  */
 @Composable
 fun LoadingToCheckAnimation(
     modifier: Modifier = Modifier,
+    triggerCheck: Boolean? = null,
     onComplete: (() -> Unit)? = null,
 ) {
     var phase by remember { mutableStateOf(LoadPhase.WAVE) }
     val convergeProgress = remember { Animatable(0f) }
     val checkProgress = remember { Animatable(0f) }
 
-    LaunchedEffect(Unit) {
-        phase = LoadPhase.WAVE
-        convergeProgress.snapTo(0f)
-        checkProgress.snapTo(0f)
-        delay(WAVE_DURATION_MS.toLong())
-        phase = LoadPhase.CONVERGE
-        convergeProgress.animateTo(1f, animationSpec = tween(CONVERGE_DURATION_MS, easing = LinearEasing))
-        phase = LoadPhase.CHECK
-        checkProgress.animateTo(1f, animationSpec = tween(CHECK_DURATION_MS, easing = LinearEasing))
-        delay(300)
-        onComplete?.invoke()
+    LaunchedEffect(triggerCheck) {
+        when (triggerCheck) {
+            null -> {
+                // 자동 시작 (기존 동작)
+                phase = LoadPhase.WAVE
+                convergeProgress.snapTo(0f)
+                checkProgress.snapTo(0f)
+                delay(WAVE_DURATION_MS.toLong())
+                phase = LoadPhase.CONVERGE
+                convergeProgress.animateTo(1f, animationSpec = tween(CONVERGE_DURATION_MS, easing = LinearEasing))
+                phase = LoadPhase.CHECK
+                checkProgress.animateTo(1f, animationSpec = tween(CHECK_DURATION_MS, easing = LinearEasing))
+                delay(300)
+                onComplete?.invoke()
+            }
+            true -> {
+                // 체크 모션으로 전환
+                phase = LoadPhase.CONVERGE
+                convergeProgress.snapTo(0f)
+                checkProgress.snapTo(0f)
+                convergeProgress.animateTo(1f, animationSpec = tween(CONVERGE_DURATION_MS, easing = LinearEasing))
+                phase = LoadPhase.CHECK
+                checkProgress.animateTo(1f, animationSpec = tween(CHECK_DURATION_MS, easing = LinearEasing))
+                delay(300)
+                onComplete?.invoke()
+            }
+            false -> {
+                phase = LoadPhase.WAVE
+                convergeProgress.snapTo(0f)
+                checkProgress.snapTo(0f)
+            }
+        }
     }
 
     LoadingToCheckAnimationContent(

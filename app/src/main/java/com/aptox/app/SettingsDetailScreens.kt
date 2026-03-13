@@ -63,11 +63,13 @@ private fun isOverlayAllowed(context: Context): Boolean =
 @Composable
 fun AccountManageScreen(
     onBack: () -> Unit,
-    onProfileClick: () -> Unit = {},
+    currentUserInfo: com.aptox.app.AuthRepository.CurrentUserInfo?,
+    onLogout: () -> Unit,
     onGoogleClick: () -> Unit = {},
     onNaverClick: () -> Unit = {},
     onKakaoClick: () -> Unit = {},
     onWithdrawClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -87,17 +89,20 @@ fun AccountManageScreen(
             SocialAccountCard(
                 iconResId = R.drawable.ic_kakao,
                 label = "카카오 계정 로그인",
-                onClick = onKakaoClick,
+                rightLabel = if (currentUserInfo?.providerLabel == "카카오") "로그아웃" else "로그인",
+                onClick = if (currentUserInfo?.providerLabel == "카카오") onLogout else onKakaoClick,
             )
             SocialAccountCard(
                 iconResId = R.drawable.ic_naver,
                 label = "네이버 계정 로그인",
-                onClick = onNaverClick,
+                rightLabel = if (currentUserInfo?.providerLabel == "네이버") "로그아웃" else "로그인",
+                onClick = if (currentUserInfo?.providerLabel == "네이버") onLogout else onNaverClick,
             )
             SocialAccountCard(
                 iconResId = R.drawable.ic_google,
                 label = "구글 계정 로그인",
-                onClick = onGoogleClick,
+                rightLabel = if (currentUserInfo?.providerLabel == "구글") "로그아웃" else "로그인",
+                onClick = if (currentUserInfo?.providerLabel == "구글") onLogout else onGoogleClick,
             )
         }
 
@@ -123,6 +128,7 @@ fun AccountManageScreen(
 private fun SocialAccountCard(
     iconResId: Int,
     label: String,
+    rightLabel: String = "로그인",
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -157,7 +163,7 @@ private fun SocialAccountCard(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = "로그아웃",
+                text = rightLabel,
                 style = AppTypography.Caption1.copy(color = AppColors.TextCaption),
             )
             Icon(
@@ -297,26 +303,25 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Spacer(modifier = Modifier.height(24.dp))
+            // Figma 1022-3824: 기기 알림 단독 카드
+            DeviceNotificationCard(
+                badgeText = if (deviceNotificationsEnabled) "허용됨" else "허용되지 않음",
+                badgeAllowed = deviceNotificationsEnabled,
+                onClick = {
+                    if (!deviceNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        })
+                    }
+                },
+            )
+            // Figma 1068-4550: 주간 리포트 / 사용시간 알림 / 목표 달성 알림 카드 (계정관리와 동일 간격 12.dp)
             SettingsListCard {
-                SettingsRowWithBadge(
-                    iconResId = R.drawable.ic_notisetting,
-                    label = "기기 알림",
-                    badgeText = if (deviceNotificationsEnabled) "허용됨" else "허용되지 않음",
-                    badgeAllowed = deviceNotificationsEnabled,
-                    subtitle = "알림을 받으려면 기기 알림 허용이 필요해요",
-                    onClick = {
-                        if (!deviceNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            })
-                        }
-                    },
-                )
-                SettingsDivider()
                 SettingsRowWithToggle(
                     label = "주간 리포트",
                     subtitle = "월요일마다, 지난 한 주 사용 현황을 알려드려요",
@@ -338,7 +343,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     onCheckedChange = { goalAchievedAlert = it },
                 )
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }

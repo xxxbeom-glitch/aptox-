@@ -309,7 +309,7 @@ fun AptoxSelectionCardGroup(items: List<SelectionCardItem>, selectedIndex: Int, 
     }
 }
 
-// Figma Select/Self Test: Default(414:7249) 흰배경/TextBody/테두리, Select(414:7257) Primary배경/TextInvert
+// Figma Select/Self Test: Default(414:7253) Primary200배경/Primary300텍스트, Select(414:7255) Primary400배경/Primary100텍스트
 @Composable
 fun AptoxSelfTestButton(
     text: String,
@@ -321,14 +321,11 @@ fun AptoxSelfTestButton(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .height(90.dp)
             .clip(shape)
             .background(
-                if (selected) AppColors.ButtonPrimaryBgDefault
-                else AppColors.ButtonSecondaryBgDefault
-            )
-            .then(
-                if (selected) Modifier
-                else Modifier.border(0.6.dp, AppColors.ButtonSecondaryBorderDefault, shape)
+                if (selected) AppColors.Primary400
+                else AppColors.Primary200
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 20.dp),
@@ -336,8 +333,8 @@ fun AptoxSelfTestButton(
     ) {
         Text(
             text = text,
-            style = AppTypography.BodyMedium.copy(
-                color = if (selected) AppColors.TextInvert else AppColors.TextBody,
+            style = AppTypography.BodyRegular.copy(
+                color = if (selected) AppColors.Primary100 else AppColors.Primary300,
                 textAlign = TextAlign.Center,
             ),
         )

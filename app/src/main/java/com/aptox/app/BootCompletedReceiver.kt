@@ -15,12 +15,14 @@ class BootCompletedReceiver : BroadcastReceiver() {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
 
         try {
-            val repo = AppRestrictionRepository(context.applicationContext)
+            val ctx = context.applicationContext
+            val repo = AppRestrictionRepository(ctx)
             val map = repo.toRestrictionMap()
             if (map.isNotEmpty()) {
-                AppMonitorService.start(context.applicationContext, map)
+                AppMonitorService.start(ctx, map)
                 Log.d(TAG, "부팅 완료: AppMonitorService 재시작 (제한 앱 ${map.size}개)")
             }
+            DailyUsageAlarmScheduler.scheduleResetWarningIfNeeded(ctx)
         } catch (e: Throwable) {
             Log.e(TAG, "부팅 후 AppMonitor 시작 실패", e)
         }

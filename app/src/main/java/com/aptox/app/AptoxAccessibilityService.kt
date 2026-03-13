@@ -53,11 +53,16 @@ class AptoxAccessibilityService : AccessibilityService() {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return
             val limitMs = restriction.limitMinutes * 60L * 1000L
             val visiblePkgs = AppVisibilityRepository(this).getPackagesWithVisibleWindows()
-            val usageMs = UsageStatsUtils.getUsageSinceBaselineMs(usm, pkg, restriction.baselineTimeMs, visiblePkgs)
+            val usageMs = UsageStatsUtils.getDailyUsageLimitMs(usm, pkg, restriction.baselineTimeMs, visiblePkgs)
             usageMs >= limitMs
         }
 
         if (shouldBlock && !BlockOverlayService.isRunning) {
+            if (restriction.blockUntilMs <= 0 &&
+                !DailyUsageNotificationHelper.hasFiredLimitReachedToday(this, pkg)
+            ) {
+                DailyUsageNotificationHelper.sendLimitReachedNotification(this, restriction.appName, pkg)
+            }
             val intent = Intent(this, BlockOverlayService::class.java).apply {
                 putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, pkg)
                 putExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS, restriction.blockUntilMs)

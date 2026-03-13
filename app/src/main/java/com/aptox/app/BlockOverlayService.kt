@@ -6,8 +6,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.PixelFormat
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.os.Build
 import android.os.IBinder
 import android.util.TypedValue
@@ -16,7 +20,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
@@ -24,12 +27,9 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Figma AA-01 앱 차단 오버레이 (node 776-2776)
- * - 배경: Grey800 (#141414)
- * - 차단 아이콘 (휴대폰 금지 표시)
- * - "{App}은 사용제한 중이에요" + "제한 해제까지 남은 시간" + remainingTime (Red300)
- * - 일시정지 버튼 240×52dp, 12dp radius, 흰색 배경
- * - 닫기 버튼 텍스트 전용
+ * 앱 차단 오버레이 (Figma AA-01 776-2776, 1136-6361)
+ * - blockUntilMs <= 0: 일일사용량 제한 — Grey850, "오늘 사용가능한 시간을 전부 사용하셨어요", 닫기
+ * - blockUntilMs > 0: 시간지정 제한 — Grey850, "지금은 {App} 을 사용하실 수 없어요", 일시정지 + 홈으로 이동
  */
 class BlockOverlayService : android.app.Service() {
 
@@ -129,23 +129,25 @@ class BlockOverlayService : android.app.Service() {
             packageName
         }
 
-        val pauseRepo = PauseRepository(this)
-        val isPremium = false
-        val pauseMinutes = if (isPremium) 10 else 5
-        val maxCount = Int.MAX_VALUE // TODO: 테스트용 무제한, 배포 전 2로 변경
-        val remainingCount = pauseRepo.getRemainingCount(packageName, maxCount)
-        val remainingTimeText = formatBlockRemainingTime(blockUntilMs)
+        val root = if (blockUntilMs <= 0) {
+            buildDailyUsageOverlay(packageName, appName)
+        } else {
+            buildTimeSpecifiedOverlay(packageName, appName, blockUntilMs)
+        }
+        root.requestFocus()
+        overlayView = root
+        windowManager?.addView(root, layoutParams)
+    }
 
-        // font XML에 fontVariationSettings('wght') 적용됨 - Variable 폰트 weight 반영
-        val fontDisplay3 = resources.getFont(R.font.suit_display3)
-        val fontCaption2 = resources.getFont(R.font.suit_caption2)
-        val fontHeadingH3 = resources.getFont(R.font.suit_heading_h3)
+    /** Figma 1136-6361: 일일사용량 제한 — "오늘 사용가능한 시간을 전부 사용하셨어요" + 닫기 */
+    private fun buildDailyUsageOverlay(packageName: String, appName: String): View {
+        val fontHeadingH2 = resources.getFont(R.font.suit_heading_h3)
         val fontButtonLarge = resources.getFont(R.font.suit_button_large)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_bg))
+            setBackgroundColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_daily_bg))
             setPadding(dp(48), dp(48), dp(48), dp(48))
             isFocusableInTouchMode = true
             setOnKeyListener { _, keyCode, event ->
@@ -156,62 +158,111 @@ class BlockOverlayService : android.app.Service() {
             }
         }
 
-        // 차단 아이콘 (Figma 776-2776)
-        val blockIcon = ImageView(this).apply {
-            setImageResource(R.drawable.ic_block_overlay)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setPadding(0, 0, 0, dp(32))
-        }
-        root.addView(blockIcon, LinearLayout.LayoutParams(dp(120), dp(120)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dp(26)
-        })
-
-        // Display3: 26sp, wght 700
         val titleText = TextView(this).apply {
-            text = "${appName}은\n사용제한 중이에요"
+            text = "오늘 사용가능한 시간을\n전부 사용하셨어요"
             setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_text_primary))
-            setTypeface(fontDisplay3)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+            setTypeface(fontHeadingH2)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
             setPadding(0, 0, 0, dp(26))
         }
         root.addView(titleText)
 
-        // Caption2: 13sp, wght 630
-        val labelText = TextView(this).apply {
-            text = "제한 해제까지 남은 시간"
+        val closeButton = TextView(this).apply {
+            text = "닫기"
+            background = GradientDrawable().apply {
+                setColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_daily_btn_bg))
+                cornerRadius = dp(12).toFloat()
+            }
+            setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_daily_btn_text))
+            setTypeface(fontButtonLarge)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
+            gravity = Gravity.CENTER
+            setOnClickListener { dismiss() }
+        }
+        val closeParams = LinearLayout.LayoutParams(dp(246), dp(60)).apply {
+            topMargin = dp(26)
+        }
+        closeParams.gravity = Gravity.CENTER_HORIZONTAL
+        root.addView(closeButton, closeParams)
+        return root
+    }
+
+    /** Figma AA-01 (776-2776): 시간 지정 차단 — 일일 오버레이와 동일 스타일, 아이콘 없음 */
+    private fun buildTimeSpecifiedOverlay(packageName: String, appName: String, blockUntilMs: Long): View {
+        val pauseRepo = PauseRepository(this)
+        val isPremium = false
+        val pauseMinutes = if (isPremium) 10 else 5
+        val maxCount = Int.MAX_VALUE // TODO: 테스트용 무제한, 배포 전 2로 변경
+        val remainingCount = pauseRepo.getRemainingCount(packageName, maxCount)
+        val remainingTimeText = formatBlockRemainingTime(blockUntilMs)
+
+        val fontHeadingH3 = resources.getFont(R.font.suit_heading_h3)
+        val fontBodyMedium = resources.getFont(R.font.suit_button_large) // BodyMedium 대체
+        val fontButtonLarge = resources.getFont(R.font.suit_button_large)
+        val redColor = ContextCompat.getColor(this, R.color.block_overlay_text_remaining)
+        val bodyText = "${remainingTimeText} 뒤에는 제한 해제가 되니\n조금만 더 참아봐요"
+        val bodySpannable = SpannableStringBuilder(bodyText).apply {
+            setSpan(
+                ForegroundColorSpan(redColor),
+                0, remainingTimeText.length,
+                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_daily_bg))
+            setPadding(dp(48), dp(48), dp(48), dp(48))
+            isFocusableInTouchMode = true
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                    dismiss()
+                    true
+                } else false
+            }
+        }
+
+        val titleText = TextView(this).apply {
+            text = "지금은 ${appName} 을\n사용하실 수 없어요"
             setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_text_primary))
-            setTypeface(fontCaption2)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
-            setPadding(0, 0, 0, dp(8))
-        }
-        root.addView(labelText)
-
-        // HeadingH3: 18sp, wght 720
-        val remainingText = TextView(this).apply {
-            text = remainingTimeText
-            setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_text_remaining))
             setTypeface(fontHeadingH3)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
-            setPadding(0, 0, 0, dp(88))
+            setPadding(0, 0, 0, dp(12))
         }
-        root.addView(remainingText)
+        root.addView(titleText)
 
-        // Button/Large: 16sp, wght 630
+        val bodyTextView = TextView(this).apply {
+            text = bodySpannable
+            setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_text_primary))
+            setTypeface(fontBodyMedium)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
+            setPadding(0, 0, 0, dp(26))
+        }
+        root.addView(bodyTextView)
+
         val pauseButton = TextView(this).apply {
             text = "${pauseMinutes}분 일시정지 사용 (${remainingCount}회 남음)"
             isEnabled = remainingCount > 0
-            setBackgroundResource(
-                if (remainingCount > 0) R.drawable.bg_block_overlay_button
-                else R.drawable.bg_block_overlay_button_disabled
-            )
+            background = if (remainingCount > 0) {
+                GradientDrawable().apply {
+                    setColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_daily_btn_bg))
+                    cornerRadius = dp(12).toFloat()
+                }
+            } else {
+                GradientDrawable().apply {
+                    setColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_btn_text_disabled))
+                    cornerRadius = dp(12).toFloat()
+                }
+            }
             setTextColor(
                 ContextCompat.getColor(
                     this@BlockOverlayService,
-                    if (remainingCount > 0) R.color.block_overlay_btn_text else R.color.block_overlay_btn_text_disabled
+                    if (remainingCount > 0) R.color.block_overlay_daily_btn_text else R.color.block_overlay_btn_text_disabled
                 )
             )
             setTypeface(fontButtonLarge)
@@ -225,26 +276,30 @@ class BlockOverlayService : android.app.Service() {
                 }
             }
         }
-        root.addView(pauseButton, LinearLayout.LayoutParams(dp(240), dp(52)).apply {
+        root.addView(pauseButton, LinearLayout.LayoutParams(dp(246), dp(60)).apply {
             topMargin = 0
-            bottomMargin = dp(8)
+            bottomMargin = dp(12)
+            gravity = Gravity.CENTER_HORIZONTAL
         })
 
-        // 닫기 버튼 — Button/Large
         val closeButton = TextView(this).apply {
-            text = "닫기"
-            setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_text_primary))
+            text = "홈으로 이동"
+            background = GradientDrawable().apply {
+                setColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_ghost_bg))
+                cornerRadius = dp(12).toFloat()
+            }
+            setTextColor(ContextCompat.getColor(this@BlockOverlayService, R.color.block_overlay_ghost_text))
             setTypeface(fontButtonLarge)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextAlignment(android.view.View.TEXT_ALIGNMENT_CENTER)
             gravity = Gravity.CENTER
             setOnClickListener { dismiss() }
         }
-        root.addView(closeButton, LinearLayout.LayoutParams(dp(240), dp(52)))
+        root.addView(closeButton, LinearLayout.LayoutParams(dp(246), dp(60)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        })
 
-        root.requestFocus()
-        overlayView = root
-        windowManager?.addView(root, layoutParams)
+        return root
     }
 
     private fun launchPauseFlow(packageName: String, appName: String, blockUntilMs: Long) {

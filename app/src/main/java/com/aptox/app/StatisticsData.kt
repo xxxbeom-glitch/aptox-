@@ -237,6 +237,18 @@ object StatisticsData {
         return dayMinutes.toList()
     }
 
+    /** 오늘 00:00 ~ 현재까지 전체 기기 사용 시간(ms). 매일 자정 리셋. */
+    fun getTodayTotalUsageMs(context: Context): Long {
+        if (!hasUsageAccess(context)) return 0L
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val todayStart = cal.timeInMillis
+        return aggregateOneDayFromEvents(context, todayStart, System.currentTimeMillis())
+    }
+
     /** 하루 구간의 총 사용량(ms). queryEvents 기반 */
     private fun aggregateOneDayFromEvents(context: Context, startMs: Long, endMs: Long): Long {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return 0L
@@ -974,6 +986,20 @@ object StatisticsData {
             }
             .sortedByDescending { it.second }
             .map { it.first }
+    }
+
+    /** AI 분류 카테고리: OTT, SNS, 웹툰, 쇼핑, 게임, 주식/코인 (기타 제외) */
+    private val AI_CATEGORIES = setOf("OTT", "SNS", "웹툰", "쇼핑", "게임", "주식,코인")
+
+    /**
+     * 지난 1주일 기준, AI 분류 카테고리(OTT/SNS/웹툰/쇼핑/게임/주식·코인) 중 가장 많이 쓴 앱 상위 3개.
+     * 홈 화면 "데이터 없을 때" 카드용.
+     */
+    fun loadTop3AppsFromAiCategories(context: Context): List<StatsAppItem> {
+        val (startMs, endMs, _) = getLastNDaysRange(7, 0)
+        val apps = loadAppUsage(context, startMs, endMs)
+            .filter { it.categoryTag != null && it.categoryTag in AI_CATEGORIES }
+        return apps.take(3)
     }
 
     /**

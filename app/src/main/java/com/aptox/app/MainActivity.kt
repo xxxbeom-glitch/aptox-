@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.core.view.WindowInsetsControllerCompat
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.navercorp.nid.NidOAuth
 import com.navercorp.nid.oauth.util.NidOAuthCallback
@@ -66,7 +67,9 @@ enum class SignUpStep {
     COMPLETE,
     ONBOARDING,
     SELFTEST,
+    SELFTEST_VER2,
     SELFTEST_LOADING,
+    USAGE_PATTERN_ANALYSIS,
     SELFTEST_RESULT,
     ADD_APP,
     MAIN,
@@ -167,7 +170,14 @@ fun SignUpFlowHost(
     LaunchedEffect(pendingPauseFlowFromOverlay) {
         if (pendingPauseFlowFromOverlay != null) step = SignUpStep.MAIN
     }
+    LaunchedEffect(Unit) {
+        if (pendingPauseFlowFromOverlay != null) return@LaunchedEffect
+        if (FirebaseAuth.getInstance().currentUser != null) {
+            step = SignUpStep.MAIN
+        }
+    }
     var selfTestAnswers by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var selfTestUserName by remember { mutableStateOf("") }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -250,8 +260,8 @@ fun SignUpFlowHost(
             }
         }
         SignUpStep.ONBOARDING -> OnboardingScreen(
-            onSkipClick = { step = SignUpStep.SELFTEST },
-            onStartClick = { step = SignUpStep.SELFTEST },
+            onSkipClick = { step = SignUpStep.SELFTEST_VER2 },
+            onStartClick = { step = SignUpStep.SELFTEST_VER2 },
         )
         SignUpStep.SELFTEST -> SelfTestScreen(
             onBackClick = { step = SignUpStep.ONBOARDING },
@@ -260,7 +270,19 @@ fun SignUpFlowHost(
                 step = SignUpStep.SELFTEST_LOADING
             },
         )
+        SignUpStep.SELFTEST_VER2 -> SelfTestScreenVer2(
+            onBack = { step = SignUpStep.ONBOARDING },
+            onComplete = { name, answers ->
+                selfTestUserName = name
+                selfTestAnswers = answers
+                step = SignUpStep.SELFTEST_LOADING
+            },
+        )
         SignUpStep.SELFTEST_LOADING -> SelfTestLoadingScreen(
+            onFinish = { step = SignUpStep.USAGE_PATTERN_ANALYSIS },
+        )
+        SignUpStep.USAGE_PATTERN_ANALYSIS -> UsagePatternAnalysisScreen(
+            userName = selfTestUserName.ifBlank { "아영" },
             onFinish = { step = SignUpStep.SELFTEST_RESULT },
         )
         SignUpStep.SELFTEST_RESULT -> SelfTestResultScreenST10(
