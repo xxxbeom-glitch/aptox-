@@ -78,6 +78,14 @@ class ManualTimerRepository(private val context: Context) {
      * 오늘 누적 사용시간(ms). 진행 중 세션 있으면 오늘 00:00 이후 경과만 포함.
      * 자정 이전에 시작된 활성 세션은 오늘 사용량에 포함하지 않음.
      */
+    /**
+     * 특정 날짜(yyyyMMdd)의 누적 사용시간(ms). 과거일은 accum 키만 사용 (당일 진행 세션 미포함).
+     */
+    fun getAccumMsForDate(packageName: String, yyyyMMdd: String): Long {
+        val key = "accum_${packageName}_$yyyyMMdd"
+        return prefs.getLong(key, 0L)
+    }
+
     fun getTodayUsageMs(packageName: String): Long {
         val accum = prefs.getLong(accumKey(packageName), 0L)
         val startMs = prefs.getLong(activeKey(packageName), -1L)

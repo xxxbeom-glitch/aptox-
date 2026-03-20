@@ -3,6 +3,10 @@ package com.aptox.app
 import android.app.Application
 import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aptox.app.usage.UsageStatsSyncWorker
@@ -11,14 +15,28 @@ import java.util.concurrent.TimeUnit
 
 class AptoxApplication : Application() {
 
+    /** 배지·백그라운드 Firestore 작업용 (UI 블로킹 방지) */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        if (defaultHandler !is AptoxUncaughtExceptionHandler) {
+            Thread.setDefaultUncaughtExceptionHandler(
+                AptoxUncaughtExceptionHandler(this, defaultHandler),
+            )
+        }
         try {
             KakaoSdk.init(this, "c2b30a1e78b6936a1603d5d18fd5ea20")
         } catch (e: Throwable) {
             Log.e(TAG, "KakaoSdk init 실패", e)
         }
         scheduleUsageStatsSync()
+    }
+
+    override fun onTerminate() {
+        applicationScope.cancel()
+        super.onTerminate()
     }
 
     companion object {

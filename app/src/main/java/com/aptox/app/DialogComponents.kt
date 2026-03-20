@@ -27,6 +27,28 @@ private val DialogPopupCorner = RoundedCornerShape(12.dp)
 private val DialogButtonCorner = RoundedCornerShape(6.dp)
 
 /**
+ * 필수 권한 안내 팝업 (Figma 1285-4277, MA-01)
+ * - [AptoxConfirmDialog]와 동일 레이아웃 · 토큰
+ * - 본문 2줄 + 단일 버튼 ([confirmButtonText], 기본 「닫기」)
+ */
+@Composable
+fun AptoxRequiredPermissionDialog(
+    onDismissRequest: () -> Unit,
+    onCloseClick: () -> Unit = onDismissRequest,
+    confirmButtonText: String = "닫기",
+    modifier: Modifier = Modifier,
+) {
+    AptoxConfirmDialog(
+        onDismissRequest = onDismissRequest,
+        title = "필수 권한을 설정해주세요",
+        subtitle = "필수 권한이 허용되지 않으면\n앱의 필수 기능을 사용하실 수 없어요",
+        confirmButtonText = confirmButtonText,
+        onConfirmClick = onCloseClick,
+        modifier = modifier,
+    )
+}
+
+/**
  * 단일 버튼 확인 팝업 (Figma 1214-4443)
  * - 제목 + 부제 + 확인 버튼 1개
  * - 팝업 12dp 라운드, 타이틀-본문 16dp, 버튼 6dp 라운드

@@ -37,9 +37,10 @@ import androidx.compose.ui.unit.dp
 fun AppLimitSetupTimeBottomSheet(
     title: String = "사용 시간을 지정해주세요",
     subtitle: String = "사용 시간을 너무 짧게 시작하면 역효과가 생겨요",
-    steps: List<String> = listOf("30분", "60분", "90분", "120분", "150분", "180분"),
+    steps: List<String> = listOf("3분", "30분", "60분", "90분", "120분", "150분", "180분"),
     initialIndex: Int = 0,
     feedbackMessages: List<String> = listOf(
+        "미리 써보기·테스트용으로 3분도 괜찮아요!",
         "초보자가 시작하기에 딱 좋은 시간이에요!",
         "아주 적당한 선택이에요!",
         "충분한 여유가 있어요!",

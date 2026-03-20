@@ -12,9 +12,13 @@ class AppRestrictionRepository(private val context: Context) {
 
     fun save(restriction: AppRestriction) {
         val list = getAll().toMutableList()
+        val wasEmpty = list.isEmpty()
         val index = list.indexOfFirst { it.packageName == restriction.packageName }
         if (index >= 0) list[index] = restriction else list.add(restriction)
         prefs.edit().putString(KEY_RESTRICTIONS, serialize(list)).apply()
+        if (wasEmpty && list.isNotEmpty()) {
+            BadgeAutoGrant.onFirstRestrictionSaved(context.applicationContext)
+        }
     }
 
     fun getAll(): List<AppRestriction> = deserialize(prefs.getString(KEY_RESTRICTIONS, null))

@@ -156,7 +156,7 @@ fun AppStatusRow(
 
 /**
  * List / App Status Data View (Figma 901-3018)
- * 앱 아이콘 + 위험 라벨 + 앱명 | 총 사용시간 + 분
+ * 앱 아이콘 + 앱명 | 총 사용시간 + 분
  * @param infoText 선택: 하단 인포박스 문구 (예: "이 시간이면 서울 부산 KTX 왕복 8번이에요!")
  */
 @Composable
@@ -165,7 +165,6 @@ fun AppStatusDataViewRow(
     appIcon: Painter,
     totalUsageMinutes: String,
     modifier: Modifier = Modifier,
-    showDangerLabel: Boolean = true,
     showLock: Boolean = true,
     infoText: String? = null,
 ) {
@@ -193,9 +192,6 @@ fun AppStatusDataViewRow(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalAlignment = Alignment.Start,
                 ) {
-                    if (showDangerLabel) {
-                        LabelDanger()
-                    }
                     Text(
                         text = appName,
                         style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),

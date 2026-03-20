@@ -114,30 +114,6 @@ class BadgeRepository(
         batch.commit().await()
     }
 
-    /**
-     * 누적/연속 달성일 기준으로 뱃지 조건 체크 후 미획득 뱃지 지급.
-     * @return 새로 지급된 badgeId 목록
-     */
-    suspend fun checkAndGrantBadgesFromProgress(
-        userId: String,
-        accumulatedDays: Int,
-        consecutiveDays: Int,
-    ): List<String> = runCatching {
-        val earnedIds = firestore.collection("users").document(userId).collection("badges").get().await()
-            .documents.map { it.id }.toSet()
-        val toGrant = mutableListOf<String>()
-        // 누적: 5→badge_004, 10→badge_005, 20→badge_013, 30→badge_006
-        mapOf(5 to "badge_004", 10 to "badge_005", 20 to "badge_013", 30 to "badge_006").forEach { (days, id) ->
-            if (accumulatedDays >= days && id !in earnedIds) toGrant.add(id)
-        }
-        // 연속: 3→badge_010, 7→badge_011, 14→badge_012, 21→badge_015, 30→badge_003
-        mapOf(3 to "badge_010", 7 to "badge_011", 14 to "badge_012", 21 to "badge_015", 30 to "badge_003").forEach { (days, id) ->
-            if (consecutiveDays >= days && id !in earnedIds) toGrant.add(id)
-        }
-        toGrant.distinct().forEach { grantBadge(userId, it) }
-        toGrant.distinct()
-    }.getOrElse { emptyList() }
-
     private fun com.google.firebase.firestore.DocumentSnapshot.toBadgeDefinition(id: String): BadgeDefinition? {
         val title = getString("title") ?: return null
         val icon = getString("icon") ?: "ico_level1"

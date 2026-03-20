@@ -50,6 +50,17 @@ import android.Manifest
 import android.os.Build
 
 /**
+ * 앱 사용정보·오버레이·접근성 필수 권한이 모두 허용되었는지 (알림 등 선택 권한 제외).
+ */
+fun android.content.Context.areRequiredAppPermissionsGranted(): Boolean {
+    val usageGranted = StatisticsData.hasUsageAccess(this)
+    val overlayGranted = Settings.canDrawOverlays(this)
+    val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+    val accessibilityGranted = enabled.contains(packageName)
+    return usageGranted && overlayGranted && accessibilityGranted
+}
+
+/**
  * 앱 접근 권한 안내 화면 (풀스크린).
  * Figma 1125-5261 기반. 아이콘 원본 사이즈 유지, 설정 바로가기 → 기기 설정 연동.
  */
@@ -57,6 +68,8 @@ import android.os.Build
 fun PermissionScreen(
     onPrimaryClick: () -> Unit,
     onGhostClick: () -> Unit, // DebugMenuScreen 호환성을 위해 시그니처 유지
+    /** false면 필수 미충족 시에도 '다음에 하기'로 진행 가능 (디버그 미리보기용) */
+    enforceRequiredPermissionsForNext: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -76,12 +89,13 @@ fun PermissionScreen(
         val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
         enabled.contains(context.packageName)
     }
+    val requiredOk = remember(refresh) { context.areRequiredAppPermissionsGranted() }
     val notificationGranted = remember(refresh) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         } else true
     }
-    val allRequiredGranted = usageGranted && overlayGranted && accessibilityGranted
+    val allRequiredGranted = requiredOk
 
     Column(
         modifier = modifier
@@ -195,11 +209,20 @@ fun PermissionScreen(
                     onClick = onPrimaryClick,
                     modifier = Modifier.fillMaxWidth(),
                 )
-            } else {
+            } else if (!enforceRequiredPermissionsForNext) {
                 AptoxTextOnlyButton(
                     text = "다음에 하기",
                     onClick = onPrimaryClick,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Text(
+                    text = "필수 권한을 모두 허용한 뒤에 다음으로 진행할 수 있어요.",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
                 )
             }
         }

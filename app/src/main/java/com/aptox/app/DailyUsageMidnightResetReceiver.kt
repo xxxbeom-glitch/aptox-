@@ -15,6 +15,7 @@ class DailyUsageMidnightResetReceiver : BroadcastReceiver() {
         if (intent?.action != ACTION_MIDNIGHT_RESET) return
         try {
             ManualTimerRepository(context).resetStaleActiveSessionsAtMidnight()
+            BadgeAutoGrant.onMidnightReset(context.applicationContext)
             Log.d(TAG, "00:00 일일 사용시간 초기화 완료")
             DailyUsageMidnightResetScheduler.scheduleNextMidnight(context)
         } catch (e: Throwable) {

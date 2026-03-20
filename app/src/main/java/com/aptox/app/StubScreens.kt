@@ -246,11 +246,6 @@ private fun SplashWithLoadingBar(
     }
 }
 
-@Composable
-fun OnboardingScreen(onSkipClick: () -> Unit, onStartClick: () -> Unit) {
-    OnboardingHost(onSkipClick = onSkipClick, onStartClick = onStartClick)
-}
-
 /** 앱 설명 온보딩 (플로우: 사용패턴 분석 → 홈) */
 @Composable
 fun AppExplanationOnboardingScreen(
@@ -312,10 +307,6 @@ internal data class MainAppRestrictionItem(
     val usageTextColor: Color? = null,
     val usageLabelColor: Color? = null,
     val restrictionType: RestrictionType = RestrictionType.TIME_SPECIFIED,
-    /** 카테고리별 일평균 사용시간 기준 위험 라벨 */
-    val showDangerLabel: Boolean = false,
-    /** 카테고리별 일평균 사용시간 기준 주의 라벨 */
-    val showWarningLabel: Boolean = false,
     /** 시간 지정 제한 앱이 일시 정지 중일 때 true (Figma 782-2858 바텀시트) */
     val isPaused: Boolean = false,
     /** 일시 정지 시점의 오늘 사용 시간 (예: "14분/30분") */
@@ -852,11 +843,8 @@ internal fun MainScreenMA01(
     ) {
         while (true) {
             kotlin.runCatching {
-                val categoryCache = withContext(Dispatchers.IO) {
-                    AppCategoryCacheRepository(context).getCache()
-                }
                 val items = withContext(Dispatchers.Default) {
-                    loadRestrictionItems(context, categoryCache)
+                    loadRestrictionItems(context)
                 }
                 val top3 = if (items.isEmpty()) {
                     withContext(Dispatchers.IO) {
@@ -975,16 +963,10 @@ private fun isTodayOnlyExpired(baselineTimeMs: Long): Boolean {
     return baselineTimeMs < cal.timeInMillis
 }
 
-private fun loadRestrictionItems(context: Context, categoryCache: Map<String, String>): List<MainAppRestrictionItem> {
+private fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem> {
     val repo = AppRestrictionRepository(context)
     val restrictions = repo.getAll()
     if (restrictions.isEmpty()) return emptyList()
-
-    // 지난 7일 일평균 사용시간(분) — 라벨 판정용 (실시간 UsageStats 이벤트 기반, DB와 독립)
-    val (startMs, endMs) = StatisticsData.getLastNDaysRange(7, 0).let { it.first to it.second }
-    val usageMsByPackage = StatisticsData.getAppUsageMsForRangeFromEvents(context, startMs, endMs)
-    val dayCount = 7
-    val dailyAvgMinutesByPackage = usageMsByPackage.mapValues { it.value / dayCount.toDouble() / 60_000 }
 
     val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
     val pauseRepo = PauseRepository(context)
@@ -1015,10 +997,6 @@ private fun loadRestrictionItems(context: Context, categoryCache: Map<String, St
                 isPaused -> formatDurationHhMmSs(pauseElapsedMs) to "일시정지 중"
                 else -> "${formatDurationHhMmSs(remainingMs.coerceAtLeast(0))} 후" to "해제"
             }
-            val dailyAvg = dailyAvgMinutesByPackage[restriction.packageName] ?: 0.0
-            val (showDanger, showWarning) = AppRiskLabelThresholds.computeLabels(
-                categoryCache[restriction.packageName], dailyAvg
-            )
             MainAppRestrictionItem(
                 appName = restriction.appName,
                 packageName = restriction.packageName,
@@ -1038,8 +1016,6 @@ private fun loadRestrictionItems(context: Context, categoryCache: Map<String, St
                     else -> AppColors.TextHighlight
                 },
                 usageLabelColor = AppColors.TextSecondary,
-                showDangerLabel = showDanger,
-                showWarningLabel = showWarning,
             )
         } else {
             // 일일 사용량: repeatDays 분기
@@ -1075,15 +1051,11 @@ private fun loadRestrictionItems(context: Context, categoryCache: Map<String, St
             val daysUntil = if (!isEveryDay && repeatDaySet.isNotEmpty()) daysUntilNextRestriction(todayIdx, repeatDaySet) else 0
             val (usageText, usageLabel) = when {
                 daysUntil > 0 -> "${daysUntil}일 후 제한 예정" to "예정"
-                remainingMs <= 0 -> "사용 가능한 시간 없음" to "남음"
+                remainingMs <= 0 -> "사용 가능한 시간 없음" to ""
                 isCountActive -> formatDurationHhMmSs(remainingMs) to "사용 중"
                 isEveryDay -> formatDurationHhMmSs(remainingMs) to "남음"
                 else -> formatDurationHhMmSs(remainingMs) to "남음"
             }
-            val dailyAvg = dailyAvgMinutesByPackage[restriction.packageName] ?: 0.0
-            val (showDanger, showWarning) = AppRiskLabelThresholds.computeLabels(
-                categoryCache[restriction.packageName], dailyAvg
-            )
             MainAppRestrictionItem(
                 appName = restriction.appName,
                 packageName = restriction.packageName,
@@ -1098,8 +1070,6 @@ private fun loadRestrictionItems(context: Context, categoryCache: Map<String, St
                 dailyLimitMinutes = "${limitMinutes}분",
                 usageTextColor = if (remainingMs <= 0) AppColors.Red300 else AppColors.TextHighlight,
                 usageLabelColor = AppColors.TextSecondary,
-                showDangerLabel = showDanger,
-                showWarningLabel = showWarning,
             )
         }
     }
@@ -1183,6 +1153,8 @@ fun MainFlowHost(
     var showAppLimitInfoSheet by remember { mutableStateOf(false) }
     var selectedAppForDetail by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
     var restrictionRefreshKey by remember { mutableIntStateOf(0) }
+    /** 필수 권한(사용정보·오버레이·접근성) 미충족 시 앱 제한 추가 대신 표시 */
+    var showRequiredPermissionDialog by remember { mutableStateOf(false) }
 
     // 일시정지 플로우 state
     var showPauseProposalSheet by remember { mutableStateOf(false) }
@@ -1274,6 +1246,14 @@ fun MainFlowHost(
     // 시스템 네비바 영역 채움: 프리미엄 배너(#2B2B2B) / 유료(카드 배경)
     val bottomFillColor = if (isFreeUser) Color(0xFF2B2B2B) else AppColors.SurfaceBackgroundCard
 
+    val onAddAppClickGuarded: () -> Unit = {
+        if (context.areRequiredAppPermissionsGranted()) {
+            onAddAppClick()
+        } else {
+            showRequiredPermissionDialog = true
+        }
+    }
+
     // 바텀바 하단 패딩 (앱바 높이 또는 기본값)
     val contentBottomPadding = when {
         bottomBarHeightDp > 0.dp -> bottomBarHeightDp
@@ -1353,7 +1333,7 @@ fun MainFlowHost(
                     0 -> {
                         Box(modifier = Modifier.weight(1f)) {
                             MainScreenMA01(
-                                onAddAppClick = onAddAppClick,
+                                onAddAppClick = onAddAppClickGuarded,
                                 onDetailClick = { item ->
                                     selectedAppForDetail = item
                                     showAppLimitInfoSheet = true
@@ -1585,6 +1565,18 @@ fun MainFlowHost(
             onDismiss = { toastMessage = null },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        if (showRequiredPermissionDialog) {
+            AptoxRequiredPermissionDialog(
+                onDismissRequest = { showRequiredPermissionDialog = false },
+                confirmButtonText = "확인",
+                onCloseClick = {
+                    showRequiredPermissionDialog = false
+                    navIndex = 3
+                    settingsDetail = SettingsDetail.Permission
+                },
+            )
+        }
 
         // 진행중인 앱 상세 바텀시트
         if (showAppLimitInfoSheet && selectedAppForDetail != null) {

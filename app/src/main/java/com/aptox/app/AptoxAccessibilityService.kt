@@ -2,7 +2,6 @@ package com.aptox.app
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
-import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -56,11 +55,8 @@ class AptoxAccessibilityService : AccessibilityService() {
                 // 카운트 정지 상태: 차단 ("카운트 시작" 안내 오버레이)
                 Pair(true, BlockOverlayService.OVERLAY_STATE_COUNT_NOT_STARTED)
             } else {
-                val usm = getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager
-                    ?: return
                 val limitMs = restriction.limitMinutes * 60L * 1000L
-                val visiblePkgs = AppVisibilityRepository(this).getPackagesWithVisibleWindows()
-                val usageMs = UsageStatsUtils.getDailyUsageLimitMs(usm, pkg, restriction.baselineTimeMs, visiblePkgs)
+                val usageMs = timerRepo.getTodayUsageMs(pkg)
                 val block = usageMs >= limitMs
                 val state = BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED
                 Pair(block, state)

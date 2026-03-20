@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 내부 저장소 crash_logs/*.txt 공유 -->
+    <files-path
+        name="crash_logs"
+        path="crash_logs/" />
+    <!-- ZIP 등 임시보내기 파일 -->
+    <cache-path
+        name="crash_exports"
+        path="crash_exports/" />
+</paths>

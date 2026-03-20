@@ -57,6 +57,10 @@ class BlockOverlayService : android.app.Service() {
         val overlayState = intent?.getStringExtra(EXTRA_OVERLAY_STATE) ?: OVERLAY_STATE_USAGE_EXCEEDED
         isRunning = true
         if (overlayView == null) {
+            // 차단 방어 배지(013~015): 실제 차단 UX만 집계 (카운트 미시작 안내는 제외), 중복 start 방지
+            if (blockUntilMs > 0L || overlayState == OVERLAY_STATE_USAGE_EXCEEDED) {
+                BadgeAutoGrant.onBlockDefenseOverlayShown(applicationContext)
+            }
             showOverlay(packageName, blockUntilMs, overlayState)
         }
         return START_NOT_STICKY

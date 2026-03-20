@@ -124,9 +124,86 @@ object StatisticsData {
         val endMs = cal.timeInMillis
         val startCal = Calendar.getInstance().apply { timeInMillis = startMs }
         val endCal = Calendar.getInstance().apply { timeInMillis = endMs }
-        val fmt = java.text.SimpleDateFormat("MM.dd", java.util.Locale.KOREAN)
+        val fmt = java.text.SimpleDateFormat("M.d", java.util.Locale.KOREAN)
         val displayText = "${fmt.format(startCal.time)} ~ ${fmt.format(endCal.time)}"
         return Triple(startMs, endMs, displayText)
+    }
+
+    /**
+     * 통계 카드 '더 과거' 화살표 비활성화용.
+     * [weekOffset] 구간(getWeekRange와 동일) 합산 사용량이 1분이라도 있으면 true.
+     */
+    fun hasAnyUsageInWeek(context: Context, weekOffset: Int): Boolean {
+        if (USE_DUMMY_FULL) return true
+        if (!hasUsageAccess(context)) return false
+        val (startMs, endMs, _) = getWeekRange(weekOffset)
+        return loadDayOfWeekMinutes(context, startMs, endMs).sum() > 0
+    }
+
+    /** [monthOffset] 달(getSingleMonthRange) 합산 사용량이 있으면 true */
+    fun hasAnyUsageInMonth(context: Context, monthOffset: Int): Boolean {
+        if (USE_DUMMY_FULL) return true
+        if (!hasUsageAccess(context)) return false
+        val (startMs, endMs, _) = getSingleMonthRange(monthOffset)
+        return loadDayOfMonthMinutes(context, startMs, endMs).sum() > 0
+    }
+
+    /** 연간 차트 [yearOffset] 창(getYearRanges) 막대들 합산 사용량이 있으면 true */
+    fun hasAnyUsageInYearChartWindow(context: Context, yearOffset: Int): Boolean {
+        if (USE_DUMMY_FULL) return true
+        if (!hasUsageAccess(context)) return false
+        val (ranges, _) = getYearRanges(yearOffset)
+        if (ranges.isEmpty()) return false
+        return loadYearsMinutes(context, ranges).sum() > 0
+    }
+
+    /**
+     * 시간대별 사용량 카드: 월=달력 월, 연=단일 연도(1/1~12/31) 기준으로
+     * 바로 이전 기간에 데이터가 있는지 판별.
+     */
+    fun hasAnyUsageInTimeSlotOlderRolling(
+        context: Context,
+        tab: Tab,
+        weekOffset: Int,
+        monthOffset: Int,
+        yearOffset: Int,
+    ): Boolean {
+        if (USE_DUMMY_FULL) return true
+        if (!hasUsageAccess(context)) return false
+        return when (tab) {
+            Tab.WEEKLY -> hasAnyUsageInWeek(context, weekOffset - 1)
+            Tab.MONTHLY -> {
+                val (s, e, _) = getSingleMonthRange(monthOffset - 1)
+                loadTimeSlot12Minutes(context, s, e, 0).sum() > 0
+            }
+            Tab.YEARLY -> {
+                val (s, e, _) = getMonthRange(yearOffset - 1)
+                loadTimeSlot12Minutes(context, s, e, 0).sum() > 0
+            }
+            else -> true
+        }
+    }
+
+    /**
+     * [startMs, endMs] 구간에서 min(오늘, endMs)까지의 달력 일수(양 끝 당일 포함), 일평균용.
+     */
+    fun daysInclusiveCappedAtNow(startMs: Long, endMs: Long): Int {
+        val now = System.currentTimeMillis()
+        val effectiveEnd = minOf(now, endMs).coerceAtLeast(startMs)
+        val startCal = Calendar.getInstance()
+        startCal.timeInMillis = startMs
+        startCal.set(Calendar.HOUR_OF_DAY, 0)
+        startCal.set(Calendar.MINUTE, 0)
+        startCal.set(Calendar.SECOND, 0)
+        startCal.set(Calendar.MILLISECOND, 0)
+        val endCal = Calendar.getInstance()
+        endCal.timeInMillis = effectiveEnd
+        endCal.set(Calendar.HOUR_OF_DAY, 0)
+        endCal.set(Calendar.MINUTE, 0)
+        endCal.set(Calendar.SECOND, 0)
+        endCal.set(Calendar.MILLISECOND, 0)
+        val diffDays = ((endCal.timeInMillis - startCal.timeInMillis) / (24L * 60 * 60 * 1000)).toInt() + 1
+        return diffDays.coerceAtLeast(1)
     }
 
     /** 요일별(월~일) 사용량 분. DB 우선, 오늘은 queryEvents 사용 */
@@ -514,39 +591,6 @@ object StatisticsData {
         }
     }
 
-    /**
-     * 지난 1주일간 제한 앱별 "제한된 분" 합산.
-     * @param isTimeSpecified true=시간 지정 제한 탭, false=일일 사용량 제한 탭
-     * - 일일 사용량 제한: restricted = max(0, limitMinutes*7 - actualUsage). 제한 덕분에 사용하지 않은 시간.
-     * - 시간 지정 제한: block 구간 이력 없음, 0 반환 (추후 block 이벤트 추적 시 구현)
-     */
-    fun loadRestrictedMinutesPerApp(
-        context: Context,
-        startMs: Long,
-        endMs: Long,
-        restrictions: List<com.aptox.app.model.AppRestriction>,
-        isTimeSpecified: Boolean,
-    ): Map<String, Long> {
-        val filtered = restrictions.filter { r ->
-            if (isTimeSpecified) r.blockUntilMs > 0 else r.blockUntilMs == 0L
-        }
-        if (filtered.isEmpty()) return emptyMap()
-
-        val appList = loadAppUsage(context, startMs, endMs)
-        val usageMsByPkg = appList.associate { it.packageName to it.usageMs }
-
-        return filtered.associate { r ->
-            val actualMinutes = (usageMsByPkg[r.packageName] ?: 0L) / 60_000
-            val restricted = if (isTimeSpecified) {
-                // 시간 지정: block 이력 없음, 추후 구현
-                0L
-            } else {
-                (r.limitMinutes * 7L - actualMinutes).coerceAtLeast(0)
-            }
-            r.packageName to restricted
-        }
-    }
-
     /** 동일 주 전주 대비 요일별 비교: (이번주 7값, 저번주 7값) */
     fun loadWeekComparisonMinutes(context: Context, weekOffset: Int): Pair<List<Long>, List<Long>> {
         val (thisStart, thisEnd, _) = getWeekRange(weekOffset)
@@ -763,7 +807,7 @@ object StatisticsData {
 
     /**
      * 시간대별 사용량 4구간 (0~6, 6~12, 12~18, 18~24시).
-     * @param divideByDays 주간=0(합산), 월간=30(일평균), 연간=365(일평균)
+     * @param divideByDays 주간=0(합산), 월·연>0이면 해당 기간 일수로 나눈 일평균(분)
      */
     fun loadTimeSlot4Minutes(context: Context, startMs: Long, endMs: Long, divideByDays: Int = 0): List<Long> {
         if (!hasUsageAccess(context)) return List(4) { 0L }
@@ -829,7 +873,7 @@ object StatisticsData {
 
     /**
      * 12개 2시간 슬롯 (0~2,2~4,4~6, 6~8,8~10,10~12, 12~14,14~16,16~18, 18~20,20~22,22~24).
-     * @param divideByDays 주간=0(합산), 월간=30(일평균), 연간=365(일평균)
+     * @param divideByDays 주간=0(합산), 월·연>0이면 해당 기간 일수로 나눈 일평균(분)
      */
     fun loadTimeSlot12Minutes(context: Context, startMs: Long, endMs: Long, divideByDays: Int = 0): List<Long> {
         if (!hasUsageAccess(context)) return List(12) { 0L }

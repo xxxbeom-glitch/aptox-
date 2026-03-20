@@ -410,11 +410,6 @@ fun IcoAppLabel(
             .clip(RoundedCornerShape(6.dp))
             .background(AppColors.TextDisabled),
     ) {
-        LabelDanger(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 4.dp, start = 4.dp),
-        )
         Icon(
             painter = painterResource(id = R.drawable.ic_lock_app),
             contentDescription = "잠금",

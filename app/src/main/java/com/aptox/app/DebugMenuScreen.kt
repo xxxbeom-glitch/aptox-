@@ -120,7 +120,6 @@ sealed class DebugScreen(val category: String, val label: String) {
     data object AppExplanationOnboarding : DebugScreen("인증/온보딩", "앱 설명 온보딩 (미구현)")
     // 화면 목차에서 제거됨 (바로가기/자가테스트 플로우)
     data object Login : DebugScreen("인증/온보딩", "Login")
-    data object Onboarding : DebugScreen("인증/온보딩", "온보딩")
     data object SelfTest : DebugScreen("인증/온보딩", "자가테스트")
     data object SelfTestResult : DebugScreen("인증/온보딩", "자가테스트 결과")
     // 앱 제한
@@ -165,9 +164,11 @@ sealed class DebugScreen(val category: String, val label: String) {
     // 사용시간/모니터링/오버레이
     data object UsageStatsTest : DebugScreen("테스트", "앱별 사용시간 (UsageStats)")
     data object AppMonitorTest : DebugScreen("테스트", "앱 모니터 서비스 (시작/중지)")
-    data object BlockOverlayTest : DebugScreen("테스트", "차단 오버레이 테스트")
-    /** Figma 1136-6361: 일일사용량 제한 - 사용 시간 전부 소진 시 오버레이 (미리보기 전용) */
-    data object DailyUsageLimitOverlayPreview : DebugScreen("테스트", "일일사용량 제한 오버레이 (Figma 1136-6361)")
+    /** BlockOverlayService 실제 UI 3종 (시간지정·일일초과·카운트미시작) */
+    data object BlockOverlayTest : DebugScreen("테스트", "차단 오버레이 (3종)")
+
+    /** 내부 저장소 크래시 로그 조회 (UncaughtExceptionHandler 자동 저장) */
+    data object CrashLogs : DebugScreen("디버그", "크래시 로그")
 }
 
 @Composable
@@ -186,10 +187,6 @@ private fun DebugScreenPreview(
     when (screen) {
         DebugScreen.Splash -> DebugSplashPreview(onBack = onBack)
         DebugScreen.Login -> DebugLoginPreview(onBack = onBack)
-        DebugScreen.Onboarding -> OnboardingScreen(
-            onSkipClick = onBack,
-            onStartClick = onBack,
-        )
         DebugScreen.SelfTest -> SelfTestScreen(
             onBackClick = onBack,
             onComplete = { onBack() },
@@ -393,13 +390,14 @@ private fun DebugScreenPreview(
         DebugScreen.Permission -> PermissionScreen(
             onPrimaryClick = onBack,
             onGhostClick = onBack,
+            enforceRequiredPermissionsForNext = false,
         )
         // 앱 설명 온보딩: 미구현 — 목차에만 표시, 탭 시 아무 동작 없음
         // DebugScreen.AppExplanationOnboarding -> (호출되지 않음)
         DebugScreen.UsageStatsTest -> UsageStatsTestScreen(onBack = onBack)
         DebugScreen.AppMonitorTest -> AppMonitorTestScreen(onBack = onBack)
         DebugScreen.BlockOverlayTest -> BlockOverlayTestScreen(onBack = onBack)
-        DebugScreen.DailyUsageLimitOverlayPreview -> DailyUsageLimitOverlayPreviewScreen(onBack = onBack)
+        DebugScreen.CrashLogs -> CrashLogScreen(onBack = onBack)
         else -> DebugPlaceholderScreen(screen = screen, onBack = onBack)
     }
 }
@@ -782,6 +780,20 @@ private fun DebugScreenListSection(
                 Text(text = screen.label, style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary))
             }
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = "디버그", style = AppTypography.Caption2.copy(color = AppColors.TextHighlight))
+        listOf(DebugScreen.CrashLogs).forEach { screen ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(AppColors.SurfaceBackgroundCard)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onScreenSelect(screen) }
+                    .padding(16.dp),
+            ) {
+                Text(text = screen.label, style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary))
+            }
+        }
     }
 }
 
@@ -899,10 +911,10 @@ private fun DebugTestsContent(onBack: () -> Unit) {
         DebugScreen.UsageStatsTest,
         DebugScreen.AppMonitorTest,
         DebugScreen.BlockOverlayTest,
-        DebugScreen.DailyUsageLimitOverlayPreview,
     )
     if (selectedScreen != null) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        // 부모 Column이 verticalScroll — 자식에 fillMaxSize 금지(스크롤 뷰 무한 높이)
+        Box(modifier = Modifier.fillMaxWidth()) {
             DebugScreenPreview(
                 screen = selectedScreen!!,
                 onBack = { selectedScreen = null },
@@ -986,7 +998,8 @@ private fun DebugBottomSheetsContent(onBack: () -> Unit) {
 
 @Composable
 private fun DebugDialogsContent() {
-    var showDialog by remember { mutableStateOf(false) }
+    var showGuideDialog by remember { mutableStateOf(false) }
+    var showRequiredPermissionDialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
         DebugSectionTitle("다이얼로그")
         Text(
@@ -994,20 +1007,34 @@ private fun DebugDialogsContent() {
             style = AppTypography.Caption1.copy(color = AppColors.TextBody),
         )
         AptoxPrimaryButton(
-            text = "다이얼로그 미리보기",
-            onClick = { showDialog = true },
+            text = "가이드 다이얼로그 미리보기",
+            onClick = { showGuideDialog = true },
+        )
+        Text(
+            text = "AptoxRequiredPermissionDialog (Figma 1285-4277) — 필수 권한 안내 · 단일 닫기",
+            style = AppTypography.Caption1.copy(color = AppColors.TextBody),
+        )
+        AptoxPrimaryButton(
+            text = "필수 권한 다이얼로그 미리보기",
+            onClick = { showRequiredPermissionDialog = true },
         )
     }
-    if (showDialog) {
+    if (showGuideDialog) {
         AptoxGuideDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { showGuideDialog = false },
             title = "꾸준한 실천",
             subtitle = "오늘도 목표를 향해 한 걸음 더 나아갔어요.",
             date = "2025.02.25",
             primaryButtonText = "계속 진행",
             secondaryButtonText = "돌아가기",
-            onPrimaryClick = { showDialog = false },
-            onSecondaryClick = { showDialog = false },
+            onPrimaryClick = { showGuideDialog = false },
+            onSecondaryClick = { showGuideDialog = false },
+        )
+    }
+    if (showRequiredPermissionDialog) {
+        AptoxRequiredPermissionDialog(
+            onDismissRequest = { showRequiredPermissionDialog = false },
+            onCloseClick = { showRequiredPermissionDialog = false },
         )
     }
 }
@@ -1510,7 +1537,7 @@ private fun DebugTestSettingsSection() {
         var showProgressResult by remember { mutableStateOf<String?>(null) }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(text = "달성 조건 수치 조작", style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary))
-            Text(text = "누적/연속 달성일을 badgeProgress에 강제 반영 후, 오늘 달성 처리로 뱃지 조건 체크를 실행합니다.", style = AppTypography.Caption1.copy(color = AppColors.TextSecondary))
+            Text(text = "누적/연속 달성일을 반영 후 badge_002~006 지급 조건만 시도합니다. (실제 로직은 BadgeAutoGrant + 자정 리셋)", style = AppTypography.Caption1.copy(color = AppColors.TextSecondary))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "누적 달성일", style = AppTypography.Caption1.copy(color = AppColors.TextBody), modifier = Modifier.widthIn(min = 80.dp))
                 BasicTextField(value = accumInput, onValueChange = { if (it.all { c -> c.isDigit() }) accumInput = it }, modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(AppColors.Grey150).padding(12.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
@@ -1530,7 +1557,7 @@ private fun DebugTestSettingsSection() {
                     val accum = progressRepo.accumulatedAchievementDays
                     val consec = progressRepo.consecutiveAchievementDays
                     scope.launch {
-                        val granted = BadgeRepository(context = context).checkAndGrantBadgesFromProgress(uid, accum, consec)
+                        val granted = BadgeAutoGrant.debugApplyProgressAndGrant(context, uid, accum, consec)
                         showProgressResult = if (granted.isEmpty()) "새로 지급된 뱃지 없음" else "지급됨: ${granted.joinToString()}"
                     }
                 }, modifier = Modifier.weight(1f))
@@ -1552,6 +1579,7 @@ private fun DebugTestSettingsSection() {
                     scope.launch {
                         BadgeRepository(context = context).deleteAllUserBadges(uid)
                         BadgeProgressRepository(context).resetAll()
+                        BadgeStatsPreferences.resetAll(context)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

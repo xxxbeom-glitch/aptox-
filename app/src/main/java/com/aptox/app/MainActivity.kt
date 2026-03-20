@@ -28,10 +28,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.core.view.WindowInsetsControllerCompat
 import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.navercorp.nid.oauth.util.NidOAuthCallback
+import android.content.Context
 import kotlinx.coroutines.launch
+
+/**
+ * 스플래시/권한 직후: 필수 권한 → (최초 1회) 사용패턴 분석 → 메인.
+ * 자가테스트·앱 설명 온보딩 등은 제거됨; [FirstRunFlowRepository] 플래그는 사용패턴 분석 완료 시에만 true.
+ */
+private suspend fun resolveStepAfterAuth(context: Context, firstRunRepo: FirstRunFlowRepository): SignUpStep {
+    if (!context.areRequiredAppPermissionsGranted()) return SignUpStep.PERMISSION
+    if (!firstRunRepo.isOnboardingFlowCompleted()) {
+        return SignUpStep.USAGE_PATTERN_ANALYSIS
+    }
+    return SignUpStep.MAIN
+}
 
 @Composable
 fun AptoxRootContent(
@@ -89,7 +101,6 @@ enum class SignUpStep {
     NAME_BIRTH_PHONE,
     VERIFICATION,
     COMPLETE,
-    ONBOARDING,
     SELFTEST,
     SELFTEST_VER2,
     SELFTEST_LOADING,
@@ -250,29 +261,30 @@ fun SignUpFlowHost(
     }
     var selfTestAnswers by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var selfTestUserName by remember { mutableStateOf("") }
-    var selfTestCameFromPermission by remember { mutableStateOf(false) }
     var loginError by remember { mutableStateOf<String?>(null) }
     var loginLoading by remember { mutableStateOf(false) }
     var autoOpenPackage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val authRepository = remember { AuthRepository() }
+    val firstRunRepo = remember { FirstRunFlowRepository(context) }
 
     // 현재 화면 렌더링
     when (step) {
         SignUpStep.SPLASH -> SplashScreen(
             onFinish = {
-                step = if (FirebaseAuth.getInstance().currentUser != null) SignUpStep.MAIN else SignUpStep.PERMISSION
+                scope.launch {
+                    step = resolveStepAfterAuth(context, firstRunRepo)
+                }
             },
         )
         SignUpStep.PERMISSION -> PermissionScreen(
             onPrimaryClick = {
-                selfTestCameFromPermission = true
-                step = SignUpStep.SELFTEST_VER2
+                scope.launch {
+                    if (!context.areRequiredAppPermissionsGranted()) return@launch
+                    step = resolveStepAfterAuth(context, firstRunRepo)
+                }
             },
-            onGhostClick = {
-                selfTestCameFromPermission = true
-                step = SignUpStep.SELFTEST_VER2
-            },
+            onGhostClick = {},
         )
         SignUpStep.LOGIN -> SplashLoginScreen(
             initialButtonsVisible = true,
@@ -284,7 +296,9 @@ fun SignUpFlowHost(
                     authRepository.signInWithNaver(activity)
                         .onSuccess {
                             loginLoading = false
-                            step = SignUpStep.ONBOARDING
+                            scope.launch {
+                                step = resolveStepAfterAuth(context, firstRunRepo)
+                            }
                         }
                         .onFailure { e ->
                             loginLoading = false
@@ -302,7 +316,9 @@ fun SignUpFlowHost(
                     authRepository.signInWithKakao(context)
                         .onSuccess {
                             loginLoading = false
-                            step = SignUpStep.ONBOARDING
+                            scope.launch {
+                                step = resolveStepAfterAuth(context, firstRunRepo)
+                            }
                         }
                         .onFailure { e ->
                             loginLoading = false
@@ -320,7 +336,9 @@ fun SignUpFlowHost(
                     authRepository.signInWithGoogle(context)
                         .onSuccess {
                             loginLoading = false
-                            step = SignUpStep.ONBOARDING
+                            scope.launch {
+                                step = resolveStepAfterAuth(context, firstRunRepo)
+                            }
                         }
                         .onFailure { e ->
                             loginLoading = false
@@ -342,25 +360,15 @@ fun SignUpFlowHost(
                 LaunchedEffect(Unit) { step = SignUpStep.LOGIN }
             }
         }
-        SignUpStep.ONBOARDING -> OnboardingScreen(
-            onSkipClick = {
-                selfTestCameFromPermission = false
-                step = SignUpStep.SELFTEST_VER2
-            },
-            onStartClick = {
-                selfTestCameFromPermission = false
-                step = SignUpStep.SELFTEST_VER2
-            },
-        )
         SignUpStep.SELFTEST -> SelfTestScreen(
-            onBackClick = { step = SignUpStep.ONBOARDING },
+            onBackClick = { step = SignUpStep.MAIN },
             onComplete = { answers ->
                 selfTestAnswers = answers
                 step = SignUpStep.SELFTEST_LOADING
             },
         )
         SignUpStep.SELFTEST_VER2 -> SelfTestScreenVer2(
-            onBack = { step = if (selfTestCameFromPermission) SignUpStep.PERMISSION else SignUpStep.ONBOARDING },
+            onBack = { step = SignUpStep.MAIN },
             onComplete = { name, answers ->
                 selfTestUserName = name
                 UserPreferencesRepository(context).userName = name
@@ -372,15 +380,32 @@ fun SignUpFlowHost(
             onFinish = { step = SignUpStep.USAGE_PATTERN_ANALYSIS },
         )
         SignUpStep.USAGE_PATTERN_ANALYSIS -> UsagePatternAnalysisScreen(
-            userName = selfTestUserName.ifBlank { "아영" },
-            onFinish = { step = SignUpStep.MAIN },
+            userName = selfTestUserName.ifBlank {
+                UserPreferencesRepository(context).userName ?: "아영"
+            },
+            onFinish = {
+                scope.launch {
+                    firstRunRepo.setOnboardingFlowCompleted(true)
+                    step = SignUpStep.MAIN
+                }
+            },
         )
         SignUpStep.APP_EXPLANATION_ONBOARDING -> AppExplanationOnboardingScreen(
-            onFinish = { step = SignUpStep.MAIN },
+            onFinish = {
+                scope.launch {
+                    firstRunRepo.setOnboardingFlowCompleted(true)
+                    step = SignUpStep.MAIN
+                }
+            },
         )
         SignUpStep.SELFTEST_RESULT -> SelfTestResultScreenST10(
             resultType = computeSelfTestResultType(selfTestAnswers),
-            onStartClick = { step = SignUpStep.MAIN },
+            onStartClick = {
+                scope.launch {
+                    firstRunRepo.setOnboardingFlowCompleted(true)
+                    step = SignUpStep.MAIN
+                }
+            },
             onBackClick = { step = SignUpStep.SELFTEST },
             rawScore = selfTestAnswers.values.sumOf { (4 - it).coerceIn(0, 4) }.coerceIn(8, 32),
         )

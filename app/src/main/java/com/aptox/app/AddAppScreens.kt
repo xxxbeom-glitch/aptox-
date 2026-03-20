@@ -796,7 +796,7 @@ fun AddAppSummaryRow(
 // 스크린샷: 헤더 "일일 사용량 제한", 4개 SelectionRow, "다음" 버튼
 // ─────────────────────────────────────────────
 
-private val DAILY_TIME_STEPS = listOf("30분", "60분", "90분", "120분", "150분", "180분")
+private val DAILY_TIME_STEPS = listOf("3분", "30분", "60분", "90분", "120분", "150분", "180분")
 private val DAILY_DAY_LABELS = listOf("월", "화", "수", "목", "금", "토", "일")
 private val DAILY_DURATION_OPTIONS = listOf("오늘 하루만", "1주", "2주", "3주", "4주")
 
@@ -1424,6 +1424,7 @@ fun AddAppFlowHost(
                     subtitle = "사용 시간을 너무 짧게 시작하면 역효과가 생겨요",
                     steps = DAILY_TIME_STEPS,
                     feedbackMessages = listOf(
+                        "미리 써보기·테스트용으로 3분도 괜찮아요",
                         "하루 30분, 스마트폰과 거리두기의 첫걸음이에요",
                         "하루 1시간 제한, 자기관리가 시작됐어요",
                         "딱 필요한 만큼만, 현명한 선택이에요",

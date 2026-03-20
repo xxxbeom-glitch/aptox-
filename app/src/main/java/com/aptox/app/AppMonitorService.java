@@ -28,7 +28,7 @@ public class AppMonitorService extends Service {
     private long lastCheckedTime = System.currentTimeMillis();
     /** MOVE_TO_FOREGROUND/BACKGROUND 이벤트로 유지되는 현재 포그라운드 앱 */
     private String lastKnownForegroundPkg = null;
-    /** 포그라운드 진입 시각(ms). UsageStats 지연 보정용 */
+    /** 포그라운드 진입 시각(ms). 이벤트 추적용 */
     private final Map<String, Long> foregroundStartTimeMap = new HashMap<>();
     /** 카운트 미중지 알림 예약된 패키지 (복귀 시 취소용) */
     private String scheduledCountReminderPkg = null;
@@ -38,6 +38,10 @@ public class AppMonitorService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // startForegroundService() 호출마다 제한 시간 내 startForeground() 필요 (이미 실행 중일 때도 동일)
+        createNotificationChannel();
+        startForeground(NOTIFICATION_ID, buildInitialNotification());
+
         boolean clearForegroundPkg = intent != null && intent.getBooleanExtra(EXTRA_CLEAR_FOREGROUND_PKG, false);
         Map<String, Integer> restrictionMap = intent != null
             ? parseRestrictionMap(intent.getStringExtra(EXTRA_RESTRICTION_MAP))
@@ -51,9 +55,6 @@ public class AppMonitorService extends Service {
 
         if (!isRunning) {
             isRunning = true;
-            createNotificationChannel();
-            Notification initialNotif = buildInitialNotification();
-            startForeground(NOTIFICATION_ID, initialNotif);
             initForegroundPkg();
             scheduleEventCheck();
             scheduleNotificationUpdate();
@@ -82,7 +83,10 @@ public class AppMonitorService extends Service {
     }
 
     /**
-     * 카운트 진행 중일 때만 알림 표시. startTimeMs 없으면(카운트 중지) 알림 제거.
+     * 알림·FGS 상태 갱신.
+     * - 카운트 중: 카운트 알림
+     * - 제한 앱 모니터링 중(map 비어 있지 않음): 기본 모니터링 알림 유지 (stopForeground 금지 — FGS 타임아웃/재시작 크래시 방지)
+     * - 둘 다 아님: FGS 해제 후 서비스 종료
      */
     private void updateNotificationIfCounting() {
         ManualTimerRepository timerRepo = new ManualTimerRepository(this);
@@ -96,11 +100,18 @@ public class AppMonitorService extends Service {
             String contentText = formatElapsedHhMmSs(elapsedMs) + " 사용 중";
             Notification n = buildCountingNotification(appName, contentText, pkg);
             startForeground(NOTIFICATION_ID, n);
+        } else if (!currentRestrictionMap.isEmpty()) {
+            startForeground(NOTIFICATION_ID, buildDefaultNotification());
+            CountReminderAlarmScheduler.INSTANCE.cancel(this);
+            scheduledCountReminderPkg = null;
         } else {
             stopForeground(STOP_FOREGROUND_REMOVE);
             if (nm != null) nm.cancel(NOTIFICATION_ID);
             CountReminderAlarmScheduler.INSTANCE.cancel(this);
             scheduledCountReminderPkg = null;
+            isRunning = false;
+            handler.removeCallbacksAndMessages(null);
+            stopSelf();
         }
     }
 
@@ -231,7 +242,7 @@ public class AppMonitorService extends Service {
                     foregroundStartTimeMap.put(pkg, event.getTimeStamp());
                     if (currentRestrictionMap.containsKey(pkg)) {
                         Log.d(TAG, "FOREGROUND 감지: " + pkg);
-                        checkAndBlockPackage(usm, pkg);
+                        checkAndBlockPackage(pkg);
                     }
                     // 카운트 미중지: 포그라운드 복귀 시 예약 취소
                     if (pkg.equals(scheduledCountReminderPkg)) {
@@ -259,7 +270,7 @@ public class AppMonitorService extends Service {
         // 이미 포그라운드에 있는 앱에서 일시정지 만료 시 바로 감지 (앱 나갔다 오지 않아도 동작)
         if (lastKnownForegroundPkg != null && currentRestrictionMap.containsKey(lastKnownForegroundPkg)) {
             Log.d(TAG, "현재 포그라운드 체크: " + lastKnownForegroundPkg);
-            checkAndBlockPackage(usm, lastKnownForegroundPkg);
+            checkAndBlockPackage(lastKnownForegroundPkg);
         }
     }
 
@@ -298,8 +309,7 @@ public class AppMonitorService extends Service {
         Log.d(TAG, "초기 포그라운드 앱: " + lastKnownForegroundPkg);
     }
 
-    private void checkAndBlockPackage(UsageStatsManager usm, String pkg) {
-        long now = System.currentTimeMillis();
+    private void checkAndBlockPackage(String pkg) {
         // 일시정지 중이면 차단 건너뜀 (타이머 알림은 PauseTimerNotificationService가 담당)
         PauseRepository pauseRepo = new PauseRepository(this);
         if (pauseRepo.isPaused(pkg)) {
@@ -321,6 +331,7 @@ public class AppMonitorService extends Service {
             long remainingMin = (restriction.getBlockUntilMs() - System.currentTimeMillis()) / 60000;
             Log.d(TAG, "체크(시간지정) | " + pkg + " 종료까지 " + remainingMin + "분 남음");
             if (!shouldBlock) {
+                BadgeAutoGrant.onTimeBlockWindowEnded(this, pkg, restriction.getBlockUntilMs());
                 // 메인 "진행중인 앱"에서 만료된 시간지정 앱을 "해제됨"으로 표시하려고 repo에서 삭제하지 않음
                 Map<String, Integer> newMap = new HashMap<>(currentRestrictionMap);
                 newMap.remove(pkg);
@@ -328,23 +339,13 @@ public class AppMonitorService extends Service {
                 Log.d(TAG, "시간 지정 차단 종료: " + pkg);
             }
         } else {
-            // 일일 사용량 차단 (자정 00시 기준 리셋)
+            // 일일 사용량 차단: 수동 타이머(ManualTimerRepository) 기준. 홈 카드(StubScreens)와 동일.
+            // UsageStatsManager는 카운트 정지 후에도 당일 포그라운드 시간이 남아 즉시 초과 차단되는 버그가 있었음.
             int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
-            long baselineMs = restriction != null ? restriction.getBaselineTimeMs() : 0L;
-            java.util.Set<String> visiblePkgs = new AppVisibilityRepository(this).getPackagesWithVisibleWindows();
-            long todayUsageMs = UsageStatsUtils.getDailyUsageLimitMs(usm, pkg, baselineMs, visiblePkgs);
-            // UsageStats는 배치 처리되어 1~5분 지연. 현재 포그라운드 세션 시간을 보정에 추가
-            Long startMs = foregroundStartTimeMap.get(pkg);
-            if (pkg.equals(lastKnownForegroundPkg) && startMs != null) {
-                long sessionMs = now - startMs;
-                long bufferMs = Math.min(sessionMs, USAGE_STATS_LAG_BUFFER_MS);
-                todayUsageMs += bufferMs;
-                Log.d(TAG, "체크(일일) | " + pkg + " 오늘=" + (todayUsageMs / 60000) + "분(보정+" + (bufferMs / 60000) + "분) | 제한=" + limitMinutes + "분");
-            } else {
-                Log.d(TAG, "체크(일일) | " + pkg + " 오늘=" + (todayUsageMs / 60000) + "분 | 제한=" + limitMinutes + "분");
-            }
-            long limitMs = limitMinutes * 60L * 1000L;
             ManualTimerRepository timerRepo = new ManualTimerRepository(this);
+            long todayUsageMs = timerRepo.getTodayUsageMs(pkg);
+            Log.d(TAG, "체크(일일) | " + pkg + " 오늘(수동타이머)=" + (todayUsageMs / 60000) + "분 | 제한=" + limitMinutes + "분");
+            long limitMs = limitMinutes * 60L * 1000L;
             boolean sessionActive = timerRepo.isSessionActive(pkg);
             if (!sessionActive) {
                 // 카운트 정지 상태: 차단 ("카운트 시작" 안내 오버레이)
@@ -431,8 +432,6 @@ public class AppMonitorService extends Service {
     private static final String CHANNEL_ID = "app_monitor";
     private static final int NOTIFICATION_ID = 1001;
     private static final long EVENT_CHECK_INTERVAL_MS = 1_000L;
-    /** UsageStats 배치 지연 보정용 (1~5분). 현재 포그라운드 세션에서 추가할 최대 ms */
-    private static final long USAGE_STATS_LAG_BUFFER_MS = 5 * 60 * 1000L;
     private static final String SEP_ITEM = "|";
     private static final String SEP_KV = ":";
     public static final String EXTRA_RESTRICTION_MAP = "restriction_map";
