@@ -20,9 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.aptox.app.AppTypography
 
-private val ToastBackgroundColor = Color(0x38000000)
+private val ToastBackgroundColor = Color(0x3C000000) // 알파 60/255
 private val ToastMinWidth = 100.dp
 private val ToastHorizontalPadding = 20.dp
 private val ToastVerticalPadding = 8.dp
@@ -33,11 +34,12 @@ private val AnimationDurationMs = 300
 
 /**
  * Figma 기준 커스텀 오버레이 Toast.
- * - 배경: 0x38000000, RoundedCornerShape(999.dp)
+ * - 배경: 0x3C000000 (알파 60), RoundedCornerShape(999.dp)
  * - 텍스트: AppTypography.Disclaimer
  * - 위치: 화면 하단 중앙, 하단에서 80dp 위
  * - 등장: fade + slideInVertically (300ms)
  * - 사라짐: fadeOut (300ms), 2초 후 onDismiss
+ * @param replayKey 같은 문구로 연속 표시할 때마다 증가시키면 애니메이션·자동 닫힘이 다시 동작
  */
 @Composable
 fun AptoxToast(
@@ -45,8 +47,9 @@ fun AptoxToast(
     visible: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    replayKey: Int = 0,
 ) {
-    LaunchedEffect(visible, message) {
+    LaunchedEffect(visible, message, replayKey) {
         if (visible && message.isNotEmpty()) {
             kotlinx.coroutines.delay(AutoDismissDelayMs)
             onDismiss()
@@ -65,7 +68,7 @@ fun AptoxToast(
                 animationSpec = androidx.compose.animation.core.tween(AnimationDurationMs),
                 targetOffsetY = { it },
             ),
-        modifier = modifier,
+        modifier = modifier.zIndex(1000f),
     ) {
         Column(
             modifier = Modifier.padding(bottom = ToastBottomOffset),

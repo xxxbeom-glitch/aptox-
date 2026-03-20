@@ -28,19 +28,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.core.view.WindowInsetsControllerCompat
 import android.util.Log
-import com.google.firebase.functions.FirebaseFunctionsException
-import com.navercorp.nid.oauth.util.NidOAuthCallback
 import android.content.Context
 import kotlinx.coroutines.launch
 
 /**
- * 스플래시/권한 직후: 필수 권한 → (최초 1회) 사용패턴 분석 → 메인.
- * 자가테스트·앱 설명 온보딩 등은 제거됨; [FirstRunFlowRepository] 플래그는 사용패턴 분석 완료 시에만 true.
+ * 스플래시/권한 직후: 필수 권한 → (최초 1회) 이름+자가테스트(Ver2) → 분석 로딩(ST-09) → 사용패턴 결과 → 메인.
+ * [FirstRunFlowRepository] 완료 플래그는 사용패턴 분석 완료 시에만 true.
  */
 private suspend fun resolveStepAfterAuth(context: Context, firstRunRepo: FirstRunFlowRepository): SignUpStep {
     if (!context.areRequiredAppPermissionsGranted()) return SignUpStep.PERMISSION
     if (!firstRunRepo.isOnboardingFlowCompleted()) {
-        return SignUpStep.USAGE_PATTERN_ANALYSIS
+        return SignUpStep.SELFTEST_VER2
+    }
+    return SignUpStep.MAIN
+}
+
+/** 권한 화면「다음에 하기」— 필수 미허용이어도 동일 1회 플로우(이름·자가테스트부터) */
+private suspend fun resolveStepAfterPermissionDeferred(context: Context, firstRunRepo: FirstRunFlowRepository): SignUpStep {
+    if (!firstRunRepo.isOnboardingFlowCompleted()) {
+        return SignUpStep.SELFTEST_VER2
     }
     return SignUpStep.MAIN
 }
@@ -117,9 +123,6 @@ enum class SignUpStep {
 
 class MainActivity : ComponentActivity() {
 
-    /** 네이버 로그인 결과를 외부(코루틴)로 전달하기 위한 콜백 */
-    var naverLoginCallback: NidOAuthCallback? = null
-
     /** 앱 제한 오버레이에서 일시정지 클릭 후 1단계(제안)부터 시작할 플로우 데이터 (packageName, appName, blockUntilMs) */
     private val pendingPauseFlowState = mutableStateOf<PendingPauseFlowFromOverlay?>(null)
     var pendingPauseFlowFromOverlay: PendingPauseFlowFromOverlay?
@@ -178,8 +181,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // NidOAuth 초기화는 네이버 로그인 시도 시점에만 수행 (KeyStoreException 크래시 방지)
 
         // Android 13+ 알림 권한 런타임 요청
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -284,51 +285,14 @@ fun SignUpFlowHost(
                     step = resolveStepAfterAuth(context, firstRunRepo)
                 }
             },
-            onGhostClick = {},
+            onGhostClick = {
+                scope.launch {
+                    step = resolveStepAfterPermissionDeferred(context, firstRunRepo)
+                }
+            },
         )
         SignUpStep.LOGIN -> SplashLoginScreen(
             initialButtonsVisible = true,
-            onNaverLoginClick = {
-                val activity = context as? MainActivity ?: return@SplashLoginScreen
-                loginError = null
-                loginLoading = true
-                scope.launch {
-                    authRepository.signInWithNaver(activity)
-                        .onSuccess {
-                            loginLoading = false
-                            scope.launch {
-                                step = resolveStepAfterAuth(context, firstRunRepo)
-                            }
-                        }
-                        .onFailure { e ->
-                            loginLoading = false
-                            loginError = when (e) {
-                                is FirebaseFunctionsException -> "네이버: ${e.code} - ${e.message}"
-                                else -> e.message ?: "네이버 로그인에 실패했어요"
-                            }
-                        }
-                }
-            },
-            onKakaoLoginClick = {
-                loginError = null
-                loginLoading = true
-                scope.launch {
-                    authRepository.signInWithKakao(context)
-                        .onSuccess {
-                            loginLoading = false
-                            scope.launch {
-                                step = resolveStepAfterAuth(context, firstRunRepo)
-                            }
-                        }
-                        .onFailure { e ->
-                            loginLoading = false
-                            loginError = when (e) {
-                                is FirebaseFunctionsException -> "카카오: ${e.code} - ${e.message}"
-                                else -> e.message ?: "카카오 로그인에 실패했어요"
-                            }
-                        }
-                }
-            },
             onGoogleLoginClick = {
                 loginError = null
                 loginLoading = true
@@ -368,7 +332,7 @@ fun SignUpFlowHost(
             },
         )
         SignUpStep.SELFTEST_VER2 -> SelfTestScreenVer2(
-            onBack = { step = SignUpStep.MAIN },
+            onBack = { step = SignUpStep.PERMISSION },
             onComplete = { name, answers ->
                 selfTestUserName = name
                 UserPreferencesRepository(context).userName = name

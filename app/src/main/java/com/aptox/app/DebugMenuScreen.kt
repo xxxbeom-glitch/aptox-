@@ -441,8 +441,6 @@ private fun DebugLoginPreview(onBack: () -> Unit) {
             logo = painterResource(R.drawable.ic_login_logo),
             onLoginClick = { _, _ -> onBack() },
             onSignUpClick = onBack,
-            onNaverLoginClick = {},
-            onKakaoLoginClick = {},
             onGoogleLoginClick = {},
             onForgotPasswordClick = {},
         )

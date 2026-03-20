@@ -13,17 +13,7 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
-import com.kakao.sdk.auth.model.OAuthToken
-import com.kakao.sdk.auth.model.Prompt
-import com.kakao.sdk.common.model.ClientError
-import com.kakao.sdk.common.model.ClientErrorCause
-import com.kakao.sdk.user.UserApiClient
-import com.navercorp.nid.NidOAuth
-import com.navercorp.nid.oauth.util.NidOAuthCallback
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Firebase Auth + Firestore 회원가입
@@ -121,109 +111,6 @@ class AuthRepository(
     }
 
     /**
-     * 카카오 로그인 후 Firebase Custom Token으로 인증
-     * 1. 카카오톡 앱 → 실패 시 카카오 계정 웹뷰 순서로 시도
-     * 2. 카카오 accessToken → Cloud Function(kakaoLogin) → Firebase Custom Token
-     */
-    suspend fun signInWithKakao(context: Context): Result<Unit> = runCatching {
-        Log.d(TAG, "카카오 로그인 시작")
-        val token = getKakaoToken(context)
-        Log.d(TAG, "카카오 토큰 발급 성공: ${token.accessToken.take(10)}...")
-
-        val result = functions.getHttpsCallable("kakaoLogin")
-            .call(hashMapOf("accessToken" to token.accessToken))
-            .await()
-        Log.d(TAG, "kakaoLogin Cloud Function 응답: ${result.data}")
-
-        @Suppress("UNCHECKED_CAST")
-        val customToken = (result.data as? Map<String, Any>)?.get("firebaseToken") as? String
-            ?: throw IllegalStateException("Firebase custom token is null")
-
-        auth.signInWithCustomToken(customToken).await()
-        Log.d(TAG, "카카오 Firebase 로그인 성공: uid=${auth.currentUser?.uid}")
-    }
-
-    /**
-     * 네이버 로그인 후 Firebase Custom Token으로 인증
-     * MainActivity에서 SDK를 초기화한 뒤, authenticate() 콜백을 코루틴으로 래핑
-     */
-    suspend fun signInWithNaver(activity: MainActivity): Result<Unit> = runCatching {
-        Log.d(TAG, "네이버 로그인 시작")
-        val accessToken = getNaverToken(activity)
-        Log.d(TAG, "네이버 토큰 발급 성공: ${accessToken.take(10)}...")
-
-        val result = functions.getHttpsCallable("naverLogin")
-            .call(hashMapOf("accessToken" to accessToken))
-            .await()
-        Log.d(TAG, "naverLogin Cloud Function 응답: ${result.data}")
-
-        @Suppress("UNCHECKED_CAST")
-        val customToken = (result.data as? Map<String, Any>)?.get("firebaseToken") as? String
-            ?: throw IllegalStateException("Firebase custom token is null")
-
-        auth.signInWithCustomToken(customToken).await()
-        Log.d(TAG, "네이버 Firebase 로그인 성공: uid=${auth.currentUser?.uid}")
-    }
-
-    /**
-     * 네이버 SDK 지연 초기화. 로그인 시도 시점에만 호출해 KeyStoreException 크래시 방지.
-     * init 실패 시(손상된 캐시 등) 크래시 대신 명시적 예외로 사용자 안내.
-     */
-    private fun ensureNaverSdkInitialized(activity: MainActivity) {
-        when (naverInitState) {
-            NAVER_INIT_OK -> return
-            NAVER_INIT_FAILED -> throw IllegalStateException(
-                "네이버 로그인을 사용할 수 없어요. 설정 > 앱 > aptox > 저장공간 > 캐시 삭제 후 다시 시도해 주세요."
-            )
-            else -> {
-                try {
-                    NidOAuth.initialize(activity, "BQa59cheqz4qQQ2H9Xen", "Ujdrf2_Czv", "aptox.")
-                    naverInitState = NAVER_INIT_OK
-                } catch (e: Throwable) {
-                    naverInitState = NAVER_INIT_FAILED
-                    Log.e(TAG, "NidOAuth init 실패 (KeyStoreException 등)", e)
-                    throw IllegalStateException(
-                        "네이버 로그인을 사용할 수 없어요. 설정 > 앱 > aptox > 저장공간 > 캐시 삭제 후 다시 시도해 주세요."
-                    )
-                }
-            }
-        }
-    }
-
-    /** 네이버 로그인 코루틴 래퍼 (동의 화면 스킵 방지: 로그인 전 기존 토큰 완전 초기화) */
-    private suspend fun getNaverToken(activity: MainActivity): String {
-        ensureNaverSdkInitialized(activity)
-        // disconnect()로 클라이언트+서버 토큰 모두 삭제 → 동의 화면 노출 보장
-        runCatching {
-            suspendCancellableCoroutine<Unit> { cont ->
-                NidOAuth.disconnect(object : NidOAuthCallback {
-                    override fun onSuccess() { cont.resume(Unit) }
-                    override fun onFailure(errorCode: String, errorDesc: String) {
-                        Log.w(TAG, "네이버 disconnect 선행 호출 실패, logout 시도: $errorCode - $errorDesc")
-                        NidOAuth.logout(object : NidOAuthCallback {
-                            override fun onSuccess() { cont.resume(Unit) }
-                            override fun onFailure(e2: String, e2d: String) { cont.resume(Unit) }
-                        })
-                    }
-                })
-            }
-        }
-        return suspendCancellableCoroutine { cont ->
-            activity.naverLoginCallback = object : NidOAuthCallback {
-                override fun onSuccess() {
-                    val token = NidOAuth.getAccessToken()
-                    if (token != null) cont.resume(token)
-                    else cont.resumeWithException(IllegalStateException("Naver access token is null"))
-                }
-                override fun onFailure(errorCode: String, errorDesc: String) {
-                    cont.resumeWithException(IllegalStateException("네이버 로그인 실패($errorCode): $errorDesc"))
-                }
-            }
-            NidOAuth.requestLogin(activity, activity.naverLoginCallback!!)
-        }
-    }
-
-    /**
      * 구글 로그인 후 Firebase Auth로 인증
      * Credential Manager를 사용해 Google ID Token 획득 → Firebase GoogleAuthProvider로 로그인
      */
@@ -280,60 +167,8 @@ class AuthRepository(
         Log.d(TAG, "구글 Firebase 로그인 성공: uid=${user.uid}")
     }
 
-    /** 카카오 토큰 코루틴 래퍼 (카카오톡 앱 우선, 실패 시 카카오 계정 웹 fallback) */
-    private suspend fun getKakaoToken(context: Context): OAuthToken =
-        suspendCancellableCoroutine { cont ->
-            val callback: (OAuthToken?, Throwable?) -> Unit = { token, error ->
-                if (error != null) {
-                    Log.e(TAG, "카카오 계정 로그인 실패", error)
-                    cont.resumeWithException(error)
-                } else if (token != null) {
-                    cont.resume(token)
-                } else {
-                    cont.resumeWithException(IllegalStateException("Kakao token is null"))
-                }
-            }
-            if (UserApiClient.instance.isKakaoTalkLoginAvailable(context)) {
-                UserApiClient.instance.loginWithKakaoTalk(context) { token, error ->
-                    if (error != null) {
-                        Log.w(TAG, "카카오톡 앱 로그인 실패, 카카오 계정 fallback: ${error.message}", error)
-                        if (error is ClientError && error.reason == ClientErrorCause.Cancelled) {
-                            cont.resumeWithException(error)
-                            return@loginWithKakaoTalk
-                        }
-                        UserApiClient.instance.loginWithKakaoAccount(
-                            context,
-                            prompts = listOf(Prompt.LOGIN),
-                            callback = callback,
-                        )
-                    } else if (token != null) {
-                        cont.resume(token)
-                    } else {
-                        Log.w(TAG, "카카오톡 앱 로그인 token/error 둘 다 null, 카카오 계정 fallback")
-                        UserApiClient.instance.loginWithKakaoAccount(
-                            context,
-                            prompts = listOf(Prompt.LOGIN),
-                            callback = callback,
-                        )
-                    }
-                }
-            } else {
-                Log.d(TAG, "카카오톡 미설치, 카카오 계정 웹 로그인으로 진행")
-                UserApiClient.instance.loginWithKakaoAccount(
-                    context,
-                    prompts = listOf(Prompt.LOGIN),
-                    callback = callback,
-                )
-            }
-        }
-
     companion object {
         private const val TAG = "AuthRepository"
-        private const val NAVER_INIT_PENDING = 0
-        private const val NAVER_INIT_OK = 1
-        private const val NAVER_INIT_FAILED = 2
-        @Volatile
-        private var naverInitState: Int = NAVER_INIT_PENDING
     }
 
     /** 현재 로그인된 사용자 표시용 정보 */
@@ -360,24 +195,9 @@ class AuthRepository(
         CurrentUserInfo(uid = user.uid, displayText = displayText, providerLabel = providerLabel)
     }.getOrNull()
 
-    /** 로그아웃 (Firebase Auth + 카카오 세션) */
+    /** 로그아웃 */
     suspend fun signOut() = runCatching {
-        try {
-            UserApiClient.instance.logout {}
-        } catch (_: Exception) { }
         auth.signOut()
         Log.d(TAG, "로그아웃 완료")
     }
-
-    /** 카카오 사용자 정보 조회 */
-    private suspend fun getUserKakaoInfo(): Map<String, String>? =
-        suspendCancellableCoroutine { cont ->
-            UserApiClient.instance.me { user, error ->
-                if (error != null || user == null) { cont.resume(null); return@me }
-                val info = mutableMapOf<String, String>()
-                user.kakaoAccount?.profile?.nickname?.let { info["nickname"] = it }
-                user.kakaoAccount?.email?.let { info["email"] = it }
-                cont.resume(info)
-            }
-        }
 }

@@ -196,7 +196,7 @@ fun PermissionScreen(
             }
         }
 
-        // 하단 버튼: 필수 권한 3개 전부 충족 시 보라색 가이드 버튼 + "다음", 그 외 "다음에 하기"
+        // 하단 버튼 (Figma 1125-5261): 필수 충족 시 Primary「다음」, 미충족 시 Text「다음에 하기」
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -209,20 +209,17 @@ fun PermissionScreen(
                     onClick = onPrimaryClick,
                     modifier = Modifier.fillMaxWidth(),
                 )
-            } else if (!enforceRequiredPermissionsForNext) {
+            } else {
                 AptoxTextOnlyButton(
                     text = "다음에 하기",
-                    onClick = onPrimaryClick,
+                    onClick = {
+                        if (enforceRequiredPermissionsForNext) {
+                            onGhostClick()
+                        } else {
+                            onPrimaryClick()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                Text(
-                    text = "필수 권한을 모두 허용한 뒤에 다음으로 진행할 수 있어요.",
-                    style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
                 )
             }
         }

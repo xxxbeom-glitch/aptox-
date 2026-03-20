@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -1144,8 +1145,21 @@ fun MainFlowHost(
         value = authRepository.getCurrentUserInfo()
     }
     var navIndex by remember { mutableIntStateOf(0) }
+    /** 챌린지(Firestore 뱃지)는 로그인 사용자만 — 비로그인 시 탭·딥링크 진입 차단 */
+    var firebaseAuthUid by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.uid) }
+    DisposableEffect(Unit) {
+        val auth = FirebaseAuth.getInstance()
+        val listener = FirebaseAuth.AuthStateListener { a ->
+            firebaseAuthUid = a.currentUser?.uid
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+    val isLoggedIn = firebaseAuthUid != null
     var settingsDetail by remember { mutableStateOf<SettingsDetail?>(null) }
     var toastMessage by remember { mutableStateOf<String?>(null) }
+    /** AptoxToast 동일 문구 연속 표시 시 애니·자동닫힘 재실행용 */
+    var toastReplayKey by remember { mutableIntStateOf(0) }
     var showTermsSheet by remember { mutableStateOf(false) }
     var showPrivacySheet by remember { mutableStateOf(false) }
     var showNotificationOverlay by remember { mutableStateOf(false) }
@@ -1199,11 +1213,24 @@ fun MainFlowHost(
     }
 
     // 주간 리포트/목표 달성 알림 탭 시 해당 탭으로 이동
-    LaunchedEffect(initialNavIndex) {
+    LaunchedEffect(initialNavIndex, isLoggedIn) {
         val idx = initialNavIndex ?: return@LaunchedEffect
         if (idx in 1..3) {
+            if (idx == 1 && !isLoggedIn) {
+                toastReplayKey += 1
+                toastMessage = "로그인 후 진행 가능합니다"
+                onNavIndexConsumed()
+                return@LaunchedEffect
+            }
             navIndex = idx
             onNavIndexConsumed()
+        }
+    }
+
+    // 챌린지 탭에 있는데 로그아웃한 경우 홈으로
+    LaunchedEffect(firebaseAuthUid, navIndex) {
+        if (firebaseAuthUid == null && navIndex == 1) {
+            navIndex = 0
         }
     }
 
@@ -1379,30 +1406,6 @@ fun MainFlowHost(
                                                 }
                                         }
                                     },
-                                    onNaverClick = {
-                                        val activity = context.findActivity() as? MainActivity
-                                        if (activity == null) {
-                                            toastMessage = "네이버 로그인을 사용할 수 없어요"
-                                            return@AccountManageScreen
-                                        }
-                                        scope.launch {
-                                            authRepository.signInWithNaver(activity)
-                                                .onSuccess { withContext(Dispatchers.Main.immediate) { accountRefreshKey++ } }
-                                                .onFailure { e ->
-                                                    toastMessage = "네이버 로그인 실패: ${e.message}"
-                                                }
-                                        }
-                                    },
-                                    onKakaoClick = {
-                                        scope.launch {
-                                            authRepository.signInWithKakao(context)
-                                                .onSuccess { withContext(Dispatchers.Main.immediate) { accountRefreshKey++ } }
-                                                .onFailure { e ->
-                                                    Log.e("StubScreens", "카카오 로그인 실패", e)
-                                                    toastMessage = "카카오 로그인 실패: ${e.message}"
-                                                }
-                                        }
-                                    },
                                     onWithdrawClick = { settingsDetail = SettingsDetail.Withdraw },
                                 )
                                 // 구독 관리 — 유료 구독 플랜 없으므로 비활성화
@@ -1549,6 +1552,11 @@ fun MainFlowHost(
                         selectedIndex = navIndex,
                         onTabSelected = {
                             if (it != navIndex) {
+                                if (it == 1 && !isLoggedIn) {
+                                    toastReplayKey += 1
+                                    toastMessage = "로그인 후 진행 가능합니다"
+                                    return@AptoxBottomNavBar
+                                }
                                 navIndex = it
                                 if (it != 3) settingsDetail = null
                             }
@@ -1557,14 +1565,16 @@ fun MainFlowHost(
                         onPremiumClick = { if (isFreeUser) showSubscriptionGuide = true },
                     )
                 }
-        }
 
-        AptoxToast(
-            message = toastMessage ?: "",
-            visible = toastMessage != null,
-            onDismiss = { toastMessage = null },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+            // Figma 가이드 AptoxToast — 바텀바·본문 위에 확실히 겹치도록 메인 Box 최상단
+            AptoxToast(
+                message = toastMessage ?: "",
+                visible = toastMessage != null,
+                onDismiss = { toastMessage = null },
+                replayKey = toastReplayKey,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
 
         if (showRequiredPermissionDialog) {
             AptoxRequiredPermissionDialog(

@@ -14,8 +14,8 @@ private val Context.firstRunDataStore: DataStore<Preferences> by preferencesData
 private val KEY_ONBOARDING_FLOW_COMPLETED = booleanPreferencesKey("onboarding_flow_completed")
 
 /**
- * 최초 1회 사용패턴 분석 화면([UsagePatternAnalysisScreen]) 완료 여부.
- * (구명칭 onboarding_flow_completed — 앱 설명 온보딩 등은 제거됨)
+ * 최초 1회 온보딩(이름·자가테스트 → 로딩 → [UsagePatternAnalysisScreen]) 완료 여부.
+ * (DataStore 키명 onboarding_flow_completed 유지)
  */
 class FirstRunFlowRepository(context: Context) {
 

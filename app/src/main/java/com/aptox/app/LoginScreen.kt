@@ -55,12 +55,10 @@ import kotlinx.coroutines.delay
  *
  * 동작:
  * 1. 로고가 화면 정중앙에 표시 (스플래시 상태)
- * 2. 1.5s 후 로고가 위쪽으로 이동하며 SNS 버튼들이 우→좌 순차 슬라이드 인
+ * 2. 1.5s 후 로고가 위쪽으로 이동하며 구글 로그인 버튼이 슬라이드 인
  */
 @Composable
 fun SplashLoginScreen(
-    onNaverLoginClick: () -> Unit = {},
-    onKakaoLoginClick: () -> Unit = {},
     onGoogleLoginClick: () -> Unit = {},
     errorMessage: String? = null,
     onClearError: () -> Unit = {},
@@ -123,17 +121,6 @@ fun SplashLoginScreen(
             animationSpec = tween(durationMillis = 420, delayMillis = 150, easing = FastOutSlowInEasing),
             label = "btn1",
         )
-        val btn2OffsetX by animateFloatAsState(
-            targetValue = if (buttonsVisible) 0f else screenWidthPx,
-            animationSpec = tween(durationMillis = 420, delayMillis = 270, easing = FastOutSlowInEasing),
-            label = "btn2",
-        )
-        val btn3OffsetX by animateFloatAsState(
-            targetValue = if (buttonsVisible) 0f else screenWidthPx,
-            animationSpec = tween(durationMillis = 420, delayMillis = 390, easing = FastOutSlowInEasing),
-            label = "btn3",
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -168,7 +155,7 @@ fun SplashLoginScreen(
                     thickness = 1.dp,
                 )
                 Text(
-                    text = "SNS 계정으로 간편하게!",
+                    text = "Google 계정으로 간편하게!",
                     style = AppTypography.Caption1.copy(color = Color.White.copy(alpha = 0.75f)),
                 )
                 HorizontalDivider(
@@ -198,45 +185,7 @@ fun SplashLoginScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // 카카오 버튼
-            SnsLoginButton(
-                text = "카카오로 시작하기",
-                icon = painterResource(R.drawable.ic_kakao),
-                backgroundColor = Color(0xFFFEE500),
-                contentColor = Color(0xFF3C1E1E),
-                isLoading = loadingProvider == "kakao",
-                onClick = {
-                    if (!isLoading) {
-                        loadingProvider = "kakao"
-                        onClearError()
-                        onKakaoLoginClick()
-                    }
-                },
-                modifier = Modifier.offset { IntOffset(btn1OffsetX.toInt(), 0) },
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // 네이버 버튼
-            SnsLoginButton(
-                text = "네이버로 시작하기",
-                icon = painterResource(R.drawable.ic_naver),
-                backgroundColor = Color(0xFF03C75A),
-                contentColor = Color.White,
-                isLoading = loadingProvider == "naver",
-                onClick = {
-                    if (!isLoading) {
-                        loadingProvider = "naver"
-                        onClearError()
-                        onNaverLoginClick()
-                    }
-                },
-                modifier = Modifier.offset { IntOffset(btn2OffsetX.toInt(), 0) },
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // 구글 버튼
+            // 구글 로그인
             SnsLoginButton(
                 text = "구글로 시작하기",
                 icon = painterResource(R.drawable.ic_google),
@@ -250,7 +199,7 @@ fun SplashLoginScreen(
                         onGoogleLoginClick()
                     }
                 },
-                modifier = Modifier.offset { IntOffset(btn3OffsetX.toInt(), 0) },
+                modifier = Modifier.offset { IntOffset(btn1OffsetX.toInt(), 0) },
             )
 
             // 로딩 완료 시 loadingProvider 초기화
@@ -308,8 +257,6 @@ fun LoginScreen(
     logo: Painter,
     onLoginClick: (email: String, password: String) -> Unit = { _, _ -> },
     onSignUpClick: () -> Unit = {},
-    onNaverLoginClick: () -> Unit = {},
-    onKakaoLoginClick: () -> Unit = {},
     onGoogleLoginClick: () -> Unit = {},
     onForgotPasswordClick: () -> Unit = {},
     errorMessage: String? = null,
@@ -317,8 +264,6 @@ fun LoginScreen(
     isLoading: Boolean = false,
 ) {
     SplashLoginScreen(
-        onNaverLoginClick = onNaverLoginClick,
-        onKakaoLoginClick = onKakaoLoginClick,
         onGoogleLoginClick = onGoogleLoginClick,
         errorMessage = errorMessage,
         onClearError = onClearError,

@@ -1,6 +1,7 @@
 package com.aptox.app
 
 import android.content.Context
+import android.util.Log
 import com.aptox.app.model.BadgeDefinition
 import com.aptox.app.model.BadgeMasterData
 import com.google.firebase.firestore.FieldValue
@@ -20,6 +21,10 @@ class BadgeRepository(
     private val context: Context? = null,
 ) {
 
+    companion object {
+        private const val TAG = "BadgeRepository"
+    }
+
     /**
      * badges/{badgeId} 문서 조회
      */
@@ -34,10 +39,14 @@ class BadgeRepository(
      * @return UserBadgeInfo(획득여부, achievedAt ms) - 미획득이면 null
      */
     suspend fun getUserBadge(userId: String, badgeId: String): UserBadgeInfo? = runCatching {
+        val path = "users/$userId/badges/$badgeId"
+        if (badgeId == "badge_001") Log.d(TAG, "Firestore 읽기(get): $path")
         val doc = firestore.collection("users").document(userId).collection("badges").document(badgeId).get().await()
         if (!doc.exists()) return@runCatching null
         val achievedAtMs = doc.getTimestamp("achievedAt")?.toDate()?.time
         UserBadgeInfo(earned = true, achievedAtMs = achievedAtMs)
+    }.onFailure { e ->
+        if (badgeId == "badge_001") Log.e(TAG, "getUserBadge 실패 badge_001", e)
     }.getOrNull()
 
     /**
@@ -49,20 +58,28 @@ class BadgeRepository(
         val badge = BadgeMasterData.badges.find { it.id == badgeId }
             ?: getBadge(badgeId)
             ?: throw IllegalArgumentException("Unknown badgeId: $badgeId")
-        firestore.collection("users").document(userId).collection("badges").document(badgeId)
-            .set(
-                mapOf(
-                    "badgeId" to badgeId,
-                    "title" to badge.title,
-                    "achievedAt" to FieldValue.serverTimestamp(),
-                    "isNotified" to false,
-                ),
-                com.google.firebase.firestore.SetOptions.merge(),
-            )
-            .await()
+        val ref = firestore.collection("users").document(userId).collection("badges").document(badgeId)
+        if (badgeId == "badge_001") {
+            Log.d(TAG, "Firestore 쓰기(set merge) 요청: ${ref.path}")
+        }
+        ref.set(
+            mapOf(
+                "badgeId" to badgeId,
+                "title" to badge.title,
+                "achievedAt" to FieldValue.serverTimestamp(),
+                "isNotified" to false,
+            ),
+            com.google.firebase.firestore.SetOptions.merge(),
+        ).await()
+        if (badgeId == "badge_001") {
+            Log.d(TAG, "Firestore 쓰기 완료(await 성공): ${ref.path}")
+        }
         context?.let { ctx ->
             GoalAchievementNotificationHelper.send(ctx, badge.title)
         }
+        Unit
+    }.onFailure { e ->
+        if (badgeId == "badge_001") Log.e(TAG, "grantBadge Firestore 실패 badge_001", e)
     }
 
     /**

@@ -42,12 +42,6 @@ android {
 }
 
 dependencies {
-    // Kakao
-    implementation("com.kakao.sdk:v2-user:2.21.4")
-
-    // Naver
-    implementation("com.navercorp.nid:oauth:5.11.2")
-
     // Google Sign-In (Credential Manager)
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")

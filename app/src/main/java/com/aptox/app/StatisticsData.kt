@@ -1071,14 +1071,19 @@ object StatisticsData {
         }
 
     /**
-     * 지난 1주일 기준, AI 분류 카테고리(OTT/SNS/웹툰/쇼핑/게임/주식·코인) 중 가장 많이 쓴 앱 상위 3개.
-     * 홈 화면 "데이터 없을 때" 카드용.
+     * 지난 1주일 기준, AI 분류(캐시)에 해당하는 앱 중 사용량 상위 3개.
+     * 홈 "진행 중 앱 없음" 카드용 — [loadAppUsageForAllowedCategories]와 동일 소스로 통일.
+     * 캐시가 아직 비었을 때만 기존 하드코딩 카테고리 매핑([loadAppUsage])으로 보조.
      */
-    fun loadTop3AppsFromAiCategories(context: Context): List<StatsAppItem> {
+    suspend fun loadTop3AppsFromAiCategories(context: Context): List<StatsAppItem> {
         val (startMs, endMs, _) = getLastNDaysRange(7, 0)
-        val apps = loadAppUsage(context, startMs, endMs)
+        val fromCache = loadAppUsageForAllowedCategories(context, startMs, endMs)
+            .sortedByDescending { it.usageMs }
+            .take(3)
+        if (fromCache.isNotEmpty()) return fromCache
+        return loadAppUsage(context, startMs, endMs)
             .filter { it.categoryTag != null && it.categoryTag in AI_CATEGORIES }
-        return apps.take(3)
+            .take(3)
     }
 
     /**

@@ -2,6 +2,7 @@ package com.aptox.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import com.aptox.app.model.AppRestriction
 
 class AppRestrictionRepository(private val context: Context) {
@@ -17,6 +18,7 @@ class AppRestrictionRepository(private val context: Context) {
         if (index >= 0) list[index] = restriction else list.add(restriction)
         prefs.edit().putString(KEY_RESTRICTIONS, serialize(list)).apply()
         if (wasEmpty && list.isNotEmpty()) {
+            Log.d(TAG, "badge_001 트리거: 최초 앱 제한 저장 (package=${restriction.packageName}) → onFirstRestrictionSaved 호출")
             BadgeAutoGrant.onFirstRestrictionSaved(context.applicationContext)
         }
     }
@@ -59,6 +61,7 @@ class AppRestrictionRepository(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "AppRestrictionRepo"
         private const val PREFS_NAME = "aptox_app_restrictions"
         private const val KEY_RESTRICTIONS = "restrictions"
         private const val SEP_ITEM = "\n"

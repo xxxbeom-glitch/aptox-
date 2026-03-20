@@ -66,8 +66,6 @@ fun AccountManageScreen(
     currentUserInfo: com.aptox.app.AuthRepository.CurrentUserInfo?,
     onLogout: () -> Unit,
     onGoogleClick: () -> Unit = {},
-    onNaverClick: () -> Unit = {},
-    onKakaoClick: () -> Unit = {},
     onWithdrawClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
 ) {
@@ -86,18 +84,6 @@ fun AccountManageScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            SocialAccountCard(
-                iconResId = R.drawable.ic_kakao,
-                label = "카카오 계정 로그인",
-                rightLabel = if (currentUserInfo?.providerLabel == "카카오") "로그아웃" else "로그인",
-                onClick = if (currentUserInfo?.providerLabel == "카카오") onLogout else onKakaoClick,
-            )
-            SocialAccountCard(
-                iconResId = R.drawable.ic_naver,
-                label = "네이버 계정 로그인",
-                rightLabel = if (currentUserInfo?.providerLabel == "네이버") "로그아웃" else "로그인",
-                onClick = if (currentUserInfo?.providerLabel == "네이버") onLogout else onNaverClick,
-            )
             SocialAccountCard(
                 iconResId = R.drawable.ic_google,
                 label = "구글 계정 로그인",

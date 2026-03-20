@@ -10,7 +10,7 @@ import kotlinx.coroutines.cancel
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aptox.app.usage.UsageStatsSyncWorker
-import com.kakao.sdk.common.KakaoSdk
+import com.google.firebase.auth.FirebaseAuth
 import java.util.concurrent.TimeUnit
 
 class AptoxApplication : Application() {
@@ -26,12 +26,13 @@ class AptoxApplication : Application() {
                 AptoxUncaughtExceptionHandler(this, defaultHandler),
             )
         }
-        try {
-            KakaoSdk.init(this, "c2b30a1e78b6936a1603d5d18fd5ea20")
-        } catch (e: Throwable) {
-            Log.e(TAG, "KakaoSdk init 실패", e)
-        }
         scheduleUsageStatsSync()
+        // 미로그인 상태에서 제한만 저장한 뒤 로그인하면 badge_001 등 Firestore 배지를 줄 수 있게 함
+        FirebaseAuth.getInstance().addAuthStateListener { auth ->
+            if (auth.currentUser != null) {
+                BadgeAutoGrant.onUserSignedInTryBadge001(this)
+            }
+        }
     }
 
     override fun onTerminate() {

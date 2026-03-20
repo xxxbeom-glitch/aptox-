@@ -17,10 +17,6 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-        <!-- 카카오톡 앱 로그인 -->
-        <package android:name="com.kakao.talk" />
-        <!-- 네이버 앱 로그인 -->
-        <package android:name="com.nhn.android.search" />
     </queries>
 
     <application
@@ -33,11 +29,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Aptox">
-
-        <!-- 카카오 로그인 앱 키 -->
-        <meta-data
-            android:name="com.kakao.sdk.AppKey"
-            android:value="c2b30a1e78b6936a1603d5d18fd5ea20" />
 
         <service
             android:name=".AppMonitorService"
@@ -115,19 +106,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        <!-- 카카오 로그인 콜백 수신 (kakao{NATIVE_APP_KEY}://oauth) -->
-        <activity
-            android:name="com.kakao.sdk.auth.AuthCodeHandlerActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="oauth"
-                    android:scheme="kakaoc2b30a1e78b6936a1603d5d18fd5ea20" />
             </intent-filter>
         </activity>
     </application>

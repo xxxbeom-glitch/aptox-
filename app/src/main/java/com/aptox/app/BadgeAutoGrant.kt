@@ -73,16 +73,34 @@ object BadgeAutoGrant {
     }
 
     private suspend fun grantIfNew(context: Context, userId: String, badgeId: String): Boolean {
+        val debug001 = badgeId == "badge_001"
         val repo = BadgeRepository(FirebaseFirestore.getInstance(), context.applicationContext)
-        if (repo.getUserBadge(userId, badgeId) != null) return false
+        val existing = runCatching { repo.getUserBadge(userId, badgeId) }
+        if (debug001) {
+            Log.d(TAG, "badge_001 grantIfNew: getUserBadge 결과=${existing.getOrNull()} (실패=${existing.isFailure}, err=${existing.exceptionOrNull()?.message})")
+        }
+        if (existing.getOrNull() != null) {
+            if (debug001) Log.d(TAG, "badge_001: 이미 보유 → grantBadge 스킵")
+            return false
+        }
+        if (debug001) Log.d(TAG, "badge_001: grantBadge 호출 직전 userId=$userId")
         val result = repo.grantBadge(userId, badgeId)
+        if (debug001) {
+            if (result.isSuccess) Log.d(TAG, "badge_001: grantBadge 성공")
+            else Log.e(TAG, "badge_001: grantBadge 실패", result.exceptionOrNull())
+        }
         if (result.isFailure) return false
         showBadgeToast(context, badgeId)
         return true
     }
 
     private fun runAsync(context: Context, block: suspend () -> Unit) {
-        val app = context.applicationContext as? AptoxApplication ?: return
+        val ac = context.applicationContext
+        val app = ac as? AptoxApplication
+        if (app == null) {
+            Log.e(TAG, "runAsync 중단: applicationContext가 AptoxApplication이 아님 (class=${ac.javaClass.name})")
+            return
+        }
         app.applicationScope.launch {
             try {
                 block()
@@ -94,8 +112,45 @@ object BadgeAutoGrant {
 
     /** badge_001: 최초 제한 등록 */
     fun onFirstRestrictionSaved(context: Context) {
+        Log.d(TAG, "onFirstRestrictionSaved 진입")
+        val uidPreview = FirebaseAuth.getInstance().currentUser?.uid
+        if (uidPreview == null) {
+            Log.w(
+                TAG,
+                "badge_001: uid=null (스플래시 플로우에 로그인 단계 없음). " +
+                    "설정에서 구글 로그인하면 자동으로 badge_001 지급을 다시 시도합니다.",
+            )
+        } else {
+            Log.d(TAG, "badge_001: uid OK (prefix=${uidPreview.take(6)}…)")
+        }
         runAsync(context) {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return@runAsync
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid == null) {
+                Log.w(TAG, "badge_001 코루틴 내부: uid null → 중단 (로그인 시 onUserSignedInTryBadge001에서 재시도)")
+                return@runAsync
+            }
+            Log.d(TAG, "badge_001 코루틴: grantIfNew 진입")
+            grantIfNew(context, uid, "badge_001")
+        }
+    }
+
+    /**
+     * 로그인 직후·앱 기동 시(이미 로그인): 제한이 1개 이상이면 badge_001 지급 재시도.
+     * 미로그인 상태에서 제한만 저장한 뒤 구글 로그인하는 경우를 처리한다.
+     */
+    fun onUserSignedInTryBadge001(context: Context) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            Log.d(TAG, "onUserSignedInTryBadge001: uid=null 스킵")
+            return
+        }
+        val hasRestriction = AppRestrictionRepository(context.applicationContext).getAll().isNotEmpty()
+        if (!hasRestriction) {
+            Log.d(TAG, "onUserSignedInTryBadge001: 제한 없음 스킵")
+            return
+        }
+        Log.d(TAG, "onUserSignedInTryBadge001: 제한 있음 → badge_001 grantIfNew 시도 (uid prefix=${uid.take(6)}…)")
+        runAsync(context) {
             grantIfNew(context, uid, "badge_001")
         }
     }
