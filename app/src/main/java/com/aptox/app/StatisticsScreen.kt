@@ -136,40 +136,6 @@ private fun StatsUsageAccessGuard(
     }
 }
 
-/** 7일치 미만 시 주간통계 진입 차단 UI */
-@Composable
-private fun StatsWeeklyDataGuard(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_disclaimer_info),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "데이터가 부족합니다",
-                style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "7일 이상 사용 후 확인할 수 있어요.",
-                style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
 /** 통계 카드 내부 섹션 간 간격 (제목-차트-리스트 등) */
 private val StatsCardContentSpacing = 16.dp
 /** 카드 내 리스트 항목 간 간격 */
@@ -219,26 +185,6 @@ fun StatisticsScreen(
             modifier = modifier,
             onGranted = { hasUsageAccess = StatisticsData.hasUsageAccess(context) },
         )
-        return
-    }
-
-    // 주간 통계: 데이터가 7일치 이상 없으면 진입 차단
-    var hasEnoughWeeklyData by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val daysWithData = UsageStatsLocalRepository(context).getDaysWithDataCountBlocking()
-            hasEnoughWeeklyData = daysWithData >= StatisticsData.MIN_DAYS_FOR_WEEKLY
-        }
-    }
-
-    if (hasEnoughWeeklyData == false) {
-        StatsWeeklyDataGuard(modifier = modifier)
-        return
-    }
-    if (hasEnoughWeeklyData != true) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            androidx.compose.material3.CircularProgressIndicator()
-        }
         return
     }
 

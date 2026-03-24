@@ -47,3 +47,12 @@
 
 # DataStore
 -keep class androidx.datastore.** { *; }
+
+# WorkManager / Room (R8 시 WorkDatabase 인스턴스 생성 실패 방지)
+-keep class androidx.work.** { *; }
+-keep interface androidx.work.** { *; }
+-keep class androidx.work.impl.** { *; }
+-keep class * extends androidx.room.RoomDatabase
+-keep class androidx.room.** { *; }
+-dontwarn androidx.work.**
+-dontwarn androidx.room.**

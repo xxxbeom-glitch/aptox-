@@ -17,7 +17,7 @@ android {
         applicationId = "com.aptox.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
+        versionCode = 8
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -102,8 +102,11 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // WorkManager + Room/Startup (명시 버전으로 전이 의존성 정렬 — WorkDatabase 초기화 안정화)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.startup.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

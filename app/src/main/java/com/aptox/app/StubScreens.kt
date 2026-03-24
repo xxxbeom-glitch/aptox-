@@ -83,6 +83,14 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import java.util.concurrent.TimeUnit
 import java.util.Calendar
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.aptox.app.usage.UsageStatsLocalRepository
+
+/** 주간 통계 탭 진입 시 7일치 미만이면 표시 */
+private const val WEEKLY_STATS_NEED_DATA_TOAST =
+    "아직 7일치 데이터가 없어요. 데이터가 쌓이면 더 정확한 통계를 볼 수 있어요."
 
 /** 자가테스트 결과 레벨 (8~32점 구간) */
 enum class SelfTestResultType {
@@ -1159,6 +1167,56 @@ fun MainFlowHost(
     var toastMessage by remember { mutableStateOf<String?>(null) }
     /** AptoxToast 동일 문구 연속 표시 시 애니·자동닫힘 재실행용 */
     var toastReplayKey by remember { mutableIntStateOf(0) }
+    /** 7일치 이상 사용 기록이 있을 때만 통계 탭 진입 허용 (null=로딩 중) */
+    var weeklyStatsEligible by remember { mutableStateOf<Boolean?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(Unit) {
+        weeklyStatsEligible = withContext(Dispatchers.IO) {
+            UsageStatsLocalRepository(context).getDaysWithDataCountBlocking() >= StatisticsData.MIN_DAYS_FOR_WEEKLY
+        }
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    weeklyStatsEligible = withContext(Dispatchers.IO) {
+                        UsageStatsLocalRepository(context).getDaysWithDataCountBlocking() >= StatisticsData.MIN_DAYS_FOR_WEEKLY
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val tryNavigateToStatisticsTab: () -> Unit = {
+        when (weeklyStatsEligible) {
+            false -> {
+                toastReplayKey += 1
+                toastMessage = WEEKLY_STATS_NEED_DATA_TOAST
+            }
+            true -> {
+                navIndex = 2
+                settingsDetail = null
+            }
+            null -> {
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        UsageStatsLocalRepository(context).getDaysWithDataCountBlocking() >= StatisticsData.MIN_DAYS_FOR_WEEKLY
+                    }
+                    weeklyStatsEligible = ok
+                    if (ok) {
+                        navIndex = 2
+                        settingsDetail = null
+                    } else {
+                        toastReplayKey += 1
+                        toastMessage = WEEKLY_STATS_NEED_DATA_TOAST
+                    }
+                }
+            }
+        }
+    }
     var showTermsSheet by remember { mutableStateOf(false) }
     var showPrivacySheet by remember { mutableStateOf(false) }
     var showNotificationOverlay by remember { mutableStateOf(false) }
@@ -1213,6 +1271,18 @@ fun MainFlowHost(
                 toastMessage = "로그인 후 진행 가능합니다"
                 onNavIndexConsumed()
                 return@LaunchedEffect
+            }
+            if (idx == 2) {
+                val ok = withContext(Dispatchers.IO) {
+                    UsageStatsLocalRepository(context).getDaysWithDataCountBlocking() >= StatisticsData.MIN_DAYS_FOR_WEEKLY
+                }
+                weeklyStatsEligible = ok
+                if (!ok) {
+                    toastReplayKey += 1
+                    toastMessage = WEEKLY_STATS_NEED_DATA_TOAST
+                    onNavIndexConsumed()
+                    return@LaunchedEffect
+                }
             }
             navIndex = idx
             onNavIndexConsumed()
@@ -1360,7 +1430,7 @@ fun MainFlowHost(
                                     selectedAppForDetail = item
                                     showAppLimitInfoSheet = true
                                 },
-                                onStatisticsClick = { navIndex = 2 },
+                                onStatisticsClick = tryNavigateToStatisticsTab,
                                 restrictionRefreshKey = restrictionRefreshKey,
                             )
                         }
@@ -1563,6 +1633,10 @@ fun MainFlowHost(
                                 if (it == 1 && !isLoggedIn) {
                                     toastReplayKey += 1
                                     toastMessage = "로그인 후 진행 가능합니다"
+                                    return@AptoxBottomNavBar
+                                }
+                                if (it == 2) {
+                                    tryNavigateToStatisticsTab()
                                     return@AptoxBottomNavBar
                                 }
                                 navIndex = it
@@ -1777,10 +1851,15 @@ fun MainFlowHost(
                 onItemClick = { item ->
                     markNotificationsRead()
                     showNotificationOverlay = false
-                    navIndex = when {
-                        item.navTarget == "statistics_weekly" || item.type == "weekly_report" -> 2
-                        item.badgeId != null -> 1
-                        else -> 1
+                    when {
+                        item.navTarget == "statistics_weekly" || item.type == "weekly_report" ->
+                            tryNavigateToStatisticsTab()
+                        item.badgeId != null -> {
+                            navIndex = 1
+                        }
+                        else -> {
+                            navIndex = 1
+                        }
                     }
                 },
                 onNotificationSettingsClick = null,
