@@ -6,4 +6,15 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- MainActivity 전용: 스플래시 → 커스텀 화면. API 31+에서는 values-v31/themes.xml에서 windowSplashScreen* 적용 -->
+    <style name="SplashTheme" parent="Theme.Aptox" />
+
+    <style name="Theme.Transparent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

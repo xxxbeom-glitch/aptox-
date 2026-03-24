@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowInsetsControllerCompat
 import android.util.Log
 import android.content.Context
@@ -180,6 +181,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -236,10 +238,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun extractPauseFlowFromIntent(i: Intent?): PendingPauseFlowFromOverlay? {
-        if (i?.action != BlockOverlayService.ACTION_PAUSE_FLOW_FROM_OVERLAY) return null
-        val pkg = i.getStringExtra(BlockOverlayService.EXTRA_PACKAGE_NAME)
-        val name = i.getStringExtra(BlockOverlayService.EXTRA_APP_NAME)
-        val blockUntilMs = i.getLongExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS, 0L)
+        if (i?.action != BlockDialogActivity.ACTION_PAUSE_FLOW_FROM_OVERLAY) return null
+        val pkg = i.getStringExtra(BlockDialogActivity.EXTRA_PACKAGE_NAME)
+        val name = i.getStringExtra(BlockDialogActivity.EXTRA_APP_NAME)
+        val blockUntilMs = i.getLongExtra(BlockDialogActivity.EXTRA_BLOCK_UNTIL_MS, 0L)
         return if (pkg != null && name != null) PendingPauseFlowFromOverlay(pkg, name, blockUntilMs) else null
     }
 }

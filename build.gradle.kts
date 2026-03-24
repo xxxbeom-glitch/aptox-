@@ -5,11 +5,17 @@ plugins {
     id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
-// aptox: APK 빌드만 수행 (기기 미연결 시 installDebug 실패 방지)
+// aptox: AAB 빌드 (Play Store 업로드용)
 tasks.register("aptox") {
+    dependsOn(":app:bundleDevRelease")
+    group = "aptox"
+    description = "AAB 빌드 (dev release). Play Store 업로드용"
+}
+// aptoxDebug: 디버그 APK (release 리소스 오류 시 사용)
+tasks.register("aptoxDebug") {
     dependsOn(":app:assembleDevDebug")
     group = "aptox"
-    description = "APK 빌드 (dev). 기기 연결 후 설치하려면 installDevDebug 실행"
+    description = "디버그 APK 빌드"
 }
 tasks.register("aptoxTest") {
     dependsOn(":app:assembleExternalTestDebug")

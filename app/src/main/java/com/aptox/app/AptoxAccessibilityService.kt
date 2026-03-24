@@ -47,7 +47,7 @@ class AptoxAccessibilityService : AccessibilityService() {
             }
         } catch (_: Exception) { /* ignore */ }
 
-        // 제한 앱 목록에 있고 차단 대상이면 BlockOverlayService 트리거 (UsageStats 보완)
+        // 제한 앱 목록에 있고 차단 대상이면 BlockDialogActivity 트리거 (UsageStats 보완)
         val repo = AppRestrictionRepository(this)
         val restriction = repo.getAll().find { it.packageName == pkg } ?: return
 
@@ -55,41 +55,29 @@ class AptoxAccessibilityService : AccessibilityService() {
         if (pauseRepo.isPaused(pkg)) return
 
         val (shouldBlock, overlayState) = if (restriction.blockUntilMs > 0) {
-            Pair(System.currentTimeMillis() < restriction.blockUntilMs, BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED)
+            Pair(System.currentTimeMillis() < restriction.blockUntilMs, BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED)
         } else {
             val timerRepo = ManualTimerRepository(this)
             val sessionActive = timerRepo.isSessionActive(pkg)
             if (!sessionActive) {
-                // 카운트 정지 상태: 차단 ("카운트 시작" 안내 오버레이)
-                Pair(true, BlockOverlayService.OVERLAY_STATE_COUNT_NOT_STARTED)
+                // 카운트 정지 상태: 차단 ("카운트 시작" 안내)
+                Pair(true, BlockDialogActivity.OVERLAY_STATE_COUNT_NOT_STARTED)
             } else {
                 val limitMs = restriction.limitMinutes * 60L * 1000L
                 val usageMs = timerRepo.getTodayUsageMs(pkg)
                 val block = usageMs >= limitMs
-                val state = BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED
+                val state = BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED
                 Pair(block, state)
             }
         }
 
-        if (shouldBlock && !BlockOverlayService.isRunning) {
-            if (restriction.blockUntilMs <= 0 && overlayState == BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED &&
+        if (shouldBlock && !BlockDialogActivity.isRunning) {
+            if (restriction.blockUntilMs <= 0 && overlayState == BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED &&
                 !DailyUsageNotificationHelper.hasFiredLimitReachedToday(this, pkg)
             ) {
                 DailyUsageNotificationHelper.sendLimitReachedNotification(this, restriction.appName, pkg)
             }
-            val intent = Intent(this, BlockOverlayService::class.java).apply {
-                putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, pkg)
-                putExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS, restriction.blockUntilMs)
-                if (restriction.blockUntilMs <= 0) {
-                    putExtra(BlockOverlayService.EXTRA_OVERLAY_STATE, overlayState)
-                    putExtra(BlockOverlayService.EXTRA_APP_NAME, restriction.appName)
-                }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            BlockDialogActivity.start(this, pkg, restriction.appName, restriction.blockUntilMs, overlayState)
         }
     }
 

@@ -16,7 +16,7 @@ import androidx.core.app.ServiceCompat
 
 /**
  * 일시정지 중 노티바에 남은 시간을 실시간으로 표시하는 포그라운드 서비스.
- * - 일시정지 시작 시 BlockOverlayService에서 startForegroundService로 시작
+ * - 일시정지 시작 시 BlockDialogActivity(일시정지 플로우)에서 startForegroundService로 시작
  * - 1초마다 남은 시간 업데이트
  * - 1분 전 별도 알림 발송
  * - 일시정지 종료 시 자동 종료

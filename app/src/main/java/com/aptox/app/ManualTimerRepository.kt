@@ -183,6 +183,21 @@ class ManualTimerRepository(private val context: Context) {
         return null
     }
 
+    /**
+     * 현재 카운트 진행 중인 모든 앱 정보.
+     * @return (packageName, startTimeMs) 리스트, 없으면 emptyList()
+     */
+    fun getAllActiveSessions(): List<Pair<String, Long>> {
+        val result = mutableListOf<Pair<String, Long>>()
+        for ((key, value) in prefs.all) {
+            if (key.startsWith("active_") && value is Long && value >= 0) {
+                val pkg = key.removePrefix("active_")
+                result.add(pkg to value)
+            }
+        }
+        return result
+    }
+
     companion object {
         private const val TAG = "ManualTimerRepository"
         private const val PREFS_NAME = "aptox_manual_timer"

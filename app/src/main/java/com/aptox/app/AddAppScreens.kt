@@ -30,7 +30,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -53,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import com.google.firebase.auth.FirebaseAuth
 import com.aptox.app.ui.components.AptoxToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,6 +69,9 @@ import kotlinx.coroutines.withContext
 /** 앱 제한 플로우 헤더 상단 여백 (status bar 아래) — 메인 화면과 동일하게 18dp */
 // 회원가입 플로우와 헤더 위치 통일 (10dp)
 private val AddAppHeaderTopPadding = 10.dp
+
+/** AddAppFlowHost에서 미확인 알림 여부 제공. provider 없으면 false */
+private val LocalHasUnreadNotifications = compositionLocalOf { false }
 
 private fun isAccessibilityEnabled(context: android.content.Context): Boolean {
     val enabled = Settings.Secure.getString(
@@ -99,6 +106,7 @@ fun AddAppScreenAA01(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     val options = listOf(
         SelectionCardItem(
             "시간 지정 제한",
@@ -106,7 +114,7 @@ fun AddAppScreenAA01(
             "",
         ),
         SelectionCardItem(
-            "일일 사용량 제한",
+            "하루 사용량 제한",
             "하루에 정해진 만큼만 사용해요",
             "",
         ),
@@ -126,6 +134,7 @@ fun AddAppScreenAA01(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -160,6 +169,7 @@ fun AddAppScreenAppSelect(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -173,6 +183,7 @@ fun AddAppScreenAppSelect(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -214,7 +225,7 @@ fun AddAppScreenAA02A01(
     modifier: Modifier = Modifier,
 ) {
     val limitOptions = listOf(
-        SelectionCardItem("일일사용량 제한", "매일 사용할 수 있는 시간을 설정합니다", "30분"),
+        SelectionCardItem("하루 사용량 제한", "매일 사용할 수 있는 시간을 설정합니다", "30분"),
         SelectionCardItem("시간지정제한", "특정 시간대에만 사용 가능하도록 설정합니다", "설정"),
         SelectionCardItem("앱 차단", "특정 시간대에 앱 사용을 차단합니다", "설정"),
     )
@@ -228,7 +239,8 @@ fun AddAppScreenAA02A01(
             .padding(top = AddAppHeaderTopPadding)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, modifier = Modifier.fillMaxWidth())
+        val hasUnreadNotifications = LocalHasUnreadNotifications.current
+        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, hasNotification = hasUnreadNotifications, modifier = Modifier.fillMaxWidth())
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -456,7 +468,6 @@ fun AddAppSelectBottomSheet(
                                 AppIconBox(
                                     appIcon = rememberAppIconPainter(item.packageName),
                                     size = 56.dp,
-                                    force6dpClip = true,
                                 )
                             } else {
                                 Box(
@@ -527,6 +538,7 @@ fun AddAppScreenAA02ATimeSetup(
     headerTitle: String = "시간 지정 제한",
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     val canProceed = selectedAppNames.isNotEmpty() && selectedTimeLimit != null
 
     Column(
@@ -544,6 +556,7 @@ fun AddAppScreenAA02ATimeSetup(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -616,6 +629,7 @@ fun AddAppCommonConfirmSummaryScreen(
     primaryButtonText: String = "계속 진행",
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -631,6 +645,7 @@ fun AddAppCommonConfirmSummaryScreen(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -753,7 +768,7 @@ fun AddAppDailyCompleteSummaryBox(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         AddAppSummaryRow(label = "선택된 앱", value = appName)
-        AddAppSummaryRow(label = "일일 사용시간", value = limitMinutes)
+        AddAppSummaryRow(label = "하루 사용시간", value = limitMinutes)
     }
 }
 
@@ -813,6 +828,7 @@ fun AddAppDailyLimitScreen01(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     val canProceed = selectedAppNames.isNotEmpty() && selectedDailyMinutes != null
 
     Column(
@@ -830,6 +846,7 @@ fun AddAppDailyLimitScreen01(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -881,6 +898,7 @@ fun AddAppDailyLimitScreen02(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     var warnAt80 by remember { mutableStateOf(true) }
 
     Column(
@@ -891,7 +909,7 @@ fun AddAppDailyLimitScreen02(
             .padding(top = AddAppHeaderTopPadding)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, modifier = Modifier.fillMaxWidth())
+        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, hasNotification = hasUnreadNotifications, modifier = Modifier.fillMaxWidth())
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -921,6 +939,7 @@ fun AddAppDailyLimitScreen03(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     var selectedDays by remember { mutableStateOf(emptySet<Int>()) }
     val dayLabels = listOf("월", "화", "수", "목", "금", "토", "일")
 
@@ -932,7 +951,7 @@ fun AddAppDailyLimitScreen03(
             .padding(top = AddAppHeaderTopPadding)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, modifier = Modifier.fillMaxWidth())
+        AptoxHeaderSub(title = "앱 제한", backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, hasNotification = hasUnreadNotifications, modifier = Modifier.fillMaxWidth())
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -941,7 +960,7 @@ fun AddAppDailyLimitScreen03(
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             Text("적용 요일을 선택해주세요", style = AppTypography.HeadingH1.copy(color = AppColors.TextPrimary))
-            Text("선택한 요일에만 일일 사용 한도가 적용됩니다.", style = AppTypography.BodyMedium.copy(color = AppColors.TextBody))
+            Text("선택한 요일에만 하루 사용 한도가 적용됩니다.", style = AppTypography.BodyMedium.copy(color = AppColors.TextBody))
             AptoxChipRow(labels = dayLabels, selectedIndices = selectedDays, onChipClick = { i -> selectedDays = if (i in selectedDays) selectedDays - i else selectedDays + i })
             Spacer(modifier = Modifier.height(24.dp))
             Column(modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1018,6 +1037,7 @@ fun AddAppCommonTimeScheduleScreen(
     headerTitle: String = "앱 제한",
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     var timeIndex by remember { mutableIntStateOf(initialTimeIndex) }
     var selectedDays by remember { mutableStateOf(emptySet<Int>()) }
 
@@ -1029,7 +1049,7 @@ fun AddAppCommonTimeScheduleScreen(
             .padding(top = AddAppHeaderTopPadding)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        AptoxHeaderSub(title = headerTitle, backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, modifier = Modifier.fillMaxWidth())
+        AptoxHeaderSub(title = headerTitle, backIcon = painterResource(R.drawable.ic_back), onBackClick = onBackClick, showNotification = true, hasNotification = hasUnreadNotifications, modifier = Modifier.fillMaxWidth())
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -1110,6 +1130,7 @@ fun AddAppDailyDurationScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     var selectedIndex by remember { mutableIntStateOf(initialIndex.coerceIn(0, options.lastIndex)) }
 
     Column(
@@ -1125,6 +1146,7 @@ fun AddAppDailyDurationScreen(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -1186,6 +1208,7 @@ fun AddAppCommonCompleteScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasUnreadNotifications = LocalHasUnreadNotifications.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -1201,6 +1224,7 @@ fun AddAppCommonCompleteScreen(
             backIcon = painterResource(R.drawable.ic_back),
             onBackClick = onBackClick,
             showNotification = true,
+            hasNotification = hasUnreadNotifications,
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -1237,6 +1261,23 @@ fun AddAppFlowHost(
     onCompleteWithFirstPackage: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
+    var firebaseAuthUid by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser?.uid) }
+    DisposableEffect(Unit) {
+        val auth = FirebaseAuth.getInstance()
+        val listener = FirebaseAuth.AuthStateListener { a -> firebaseAuthUid = a.currentUser?.uid }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+    var hasUnreadNotifications by remember { mutableStateOf(false) }
+    LaunchedEffect(firebaseAuthUid) {
+        if (firebaseAuthUid != null) {
+            NotificationRepository(context).hasUnreadNotificationsFlow(firebaseAuthUid).collect {
+                hasUnreadNotifications = it
+            }
+        } else {
+            hasUnreadNotifications = false
+        }
+    }
     var step by remember { mutableStateOf(AddAppStep.AA_DAILY_01) }
     var previousStepBeforeConfirm by remember { mutableStateOf(AddAppStep.AA_02A_TIME_05) }
     var flowHeaderTitle by remember { mutableStateOf("하루 사용량 제한") }
@@ -1252,6 +1293,7 @@ fun AddAppFlowHost(
     val timeSteps = listOf("30분", "60분", "120분", "180분", "240분", "360분")
     var dailyLimitMinutes by remember { mutableStateOf<String?>(null) }
 
+    CompositionLocalProvider(LocalHasUnreadNotifications provides hasUnreadNotifications) {
     when (step) {
         AddAppStep.AA_01 -> { /* 사용 안 함 — 바로 AA_DAILY_01로 진입 */ }
         AddAppStep.AA_02A_01 -> AddAppScreenAA02A01(
@@ -1541,6 +1583,7 @@ fun AddAppFlowHost(
                 onBackClick = { step = previousStepBeforeConfirm },
             )
         }
+    }
     }
 }
 

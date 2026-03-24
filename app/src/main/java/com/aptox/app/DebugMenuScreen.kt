@@ -164,8 +164,8 @@ sealed class DebugScreen(val category: String, val label: String) {
     // 사용시간/모니터링/오버레이
     data object UsageStatsTest : DebugScreen("테스트", "앱별 사용시간 (UsageStats)")
     data object AppMonitorTest : DebugScreen("테스트", "앱 모니터 서비스 (시작/중지)")
-    /** BlockOverlayService 실제 UI 3종 (시간지정·일일초과·카운트미시작) */
-    data object BlockOverlayTest : DebugScreen("테스트", "차단 오버레이 (3종)")
+    /** BlockDialogActivity AlertDialog 3종 (시간지정·일일초과·카운트미시작) */
+    data object BlockOverlayTest : DebugScreen("테스트", "차단 AlertDialog (3종)")
 
     /** 내부 저장소 크래시 로그 조회 (UncaughtExceptionHandler 자동 저장) */
     data object CrashLogs : DebugScreen("디버그", "크래시 로그")

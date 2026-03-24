@@ -310,7 +310,7 @@ fun AppLimitInfoBottomSheetDaily(
         },
         primaryButtonText = when {
             usageExhausted -> "오늘 사용량을 전부 사용하셨어요"
-            isCountActive -> "카운트 정지"
+            isCountActive -> "카운트 중지"
             else -> "카운트 시작"
         },
         primaryButtonEnabled = !usageExhausted,
@@ -323,7 +323,7 @@ fun AppLimitInfoBottomSheetDaily(
             AptoxConfirmDialog(
                 onDismissRequest = { showCountStartDialog = false },
                 title = "카운트가 시작됐어요",
-                subtitle = "앱 사용이 끝나면 반드시\n카운트 종료를 눌러주세요\n종료하지 않으면 사용시간이\n계속 누적돼요",
+                subtitle = "앱 사용이 끝나면 반드시\n카운트 중지를 눌러주세요\n중지하지 않으면 사용시간이\n계속 누적돼요",
                 confirmButtonText = "확인",
                 onConfirmClick = {
                     showCountStartDialog = false
@@ -368,9 +368,9 @@ fun AppLimitInfoBottomSheetDaily(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 listOf(
-                    AppLimitSummaryRow("일일 사용량", "${limitMinutes}분"),
+                    AppLimitSummaryRow("하루 사용량", "${limitMinutes}분"),
                     AppLimitSummaryRow("현재 사용량", "${todayUsageMinutes}분"),
-                    AppLimitSummaryRow("제한 방식", "일일 사용량 제한", valueColor = AppColors.TextHighlight),
+                    AppLimitSummaryRow("제한 방식", "하루 사용량 제한", valueColor = AppColors.TextHighlight),
                 ).forEach { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),

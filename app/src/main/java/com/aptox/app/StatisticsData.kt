@@ -39,6 +39,9 @@ import java.util.Calendar
  */
 object StatisticsData {
 
+    /** 주간 통계 화면 진입 최소 날짜 수 (데이터가 존재하는 날 기준, 연속 아님) */
+    const val MIN_DAYS_FOR_WEEKLY = 7
+
     /** 월간 탭 활성화 최소 누적 일수 */
     const val MIN_DAYS_FOR_MONTHLY = 30
 

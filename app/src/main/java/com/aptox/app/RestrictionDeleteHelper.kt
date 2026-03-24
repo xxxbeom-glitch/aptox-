@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
  * - AppRestrictionRepository: 제한 설정 삭제
  * - ManualTimerRepository: 사용량 데이터는 통계용으로 유지 (삭제하지 않음)
  * - PauseRepository: 일시정지 데이터 삭제
- * - BlockOverlayService: 해당 앱 차단 오버레이 즉시 해제
+ * - BlockDialogActivity: 해당 앱 차단 다이얼로그 즉시 닫기
  * - AppMonitorService: restriction map 갱신 후 감시 재시작
  * - PauseTimerNotificationService: 해당 앱 일시정지 알림 즉시 중지
  * - Firestore users/{userId}/appLimitLogs: 사용자 제한 해제 이벤트 기록
@@ -45,12 +45,8 @@ object RestrictionDeleteHelper {
         // 3. AppRestrictionRepository: 제한 설정 삭제
         restrictionRepo.delete(packageName)
 
-        // 4. BlockOverlayService: 해당 앱 차단 오버레이 즉시 해제
-        val dismissOverlayIntent = Intent(context, BlockOverlayService::class.java).apply {
-            action = BlockOverlayService.ACTION_DISMISS_IF_PACKAGE
-            putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, packageName)
-        }
-        context.startService(dismissOverlayIntent)
+        // 4. BlockDialogActivity: 해당 앱 차단 다이얼로그 즉시 닫기
+        BlockDialogActivity.dismissIfPackage(context, packageName)
 
         // 5. PauseTimerNotificationService: 해당 앱 일시정지 알림 즉시 제거
         val cancelIntent = Intent(context, PauseTimerNotificationService::class.java).apply {

@@ -242,7 +242,7 @@ fun AptoxHeaderSub(
     actionIcon: Painter? = null,
     onActionClick: (() -> Unit)? = null,
     showNotification: Boolean = true,
-    hasNotification: Boolean = true,
+    hasNotification: Boolean = false,
     onNotificationClick: (() -> Unit)? = null,
 ) {
     Box(

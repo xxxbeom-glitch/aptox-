@@ -98,15 +98,21 @@ public class AppMonitorService extends Service {
      */
     private void updateNotificationIfCounting() {
         ManualTimerRepository timerRepo = new ManualTimerRepository(this);
-        kotlin.Pair<String, Long> active = timerRepo.getActiveSession();
+        java.util.List<kotlin.Pair<String, Long>> sessions = timerRepo.getAllActiveSessions();
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (active != null) {
-            String pkg = active.getFirst();
-            long startMs = active.getSecond();
-            long elapsedMs = System.currentTimeMillis() - startMs;
-            String appName = getAppNameForPackage(pkg);
-            String contentText = formatElapsedHhMmSs(elapsedMs) + " 사용 중";
-            Notification n = buildCountingNotification(appName, contentText, pkg);
+        if (!sessions.isEmpty()) {
+            Notification n;
+            if (sessions.size() == 1) {
+                String pkg = sessions.get(0).getFirst();
+                long todayUsageMs = timerRepo.getTodayUsageMs(pkg);
+                int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
+                long limitMs = (long) limitMinutes * 60 * 1000;
+                long remainingMs = Math.max(0, limitMs - todayUsageMs);
+                String appName = getAppNameForPackage(pkg);
+                n = buildCountingNotification(appName, remainingMs, pkg);
+            } else {
+                n = buildCountingNotification(sessions.size());
+            }
             startForeground(NOTIFICATION_ID, n);
         } else if (!currentRestrictionMap.isEmpty()) {
             startForeground(NOTIFICATION_ID, buildDefaultNotification());
@@ -125,13 +131,19 @@ public class AppMonitorService extends Service {
 
     private Notification buildInitialNotification() {
         ManualTimerRepository timerRepo = new ManualTimerRepository(this);
-        kotlin.Pair<String, Long> active = timerRepo.getActiveSession();
-        if (active != null) {
-            String pkg = active.getFirst();
-            long startMs = active.getSecond();
-            long elapsedMs = System.currentTimeMillis() - startMs;
-            String appName = getAppNameForPackage(pkg);
-            return buildCountingNotification(appName, formatElapsedHhMmSs(elapsedMs) + " 사용 중", pkg);
+        java.util.List<kotlin.Pair<String, Long>> sessions = timerRepo.getAllActiveSessions();
+        if (!sessions.isEmpty()) {
+            if (sessions.size() == 1) {
+                String pkg = sessions.get(0).getFirst();
+                long todayUsageMs = timerRepo.getTodayUsageMs(pkg);
+                int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
+                long limitMs = (long) limitMinutes * 60 * 1000;
+                long remainingMs = Math.max(0, limitMs - todayUsageMs);
+                String appName = getAppNameForPackage(pkg);
+                return buildCountingNotification(appName, remainingMs, pkg);
+            } else {
+                return buildCountingNotification(sessions.size());
+            }
         }
         return buildDefaultNotification();
     }
@@ -141,8 +153,8 @@ public class AppMonitorService extends Service {
             getPackageManager().getLaunchIntentForPackage(getPackageName()),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("앱 모니터링 중")
-            .setContentText("제한 앱 사용 감시")
+            .setContentTitle("앱 사용 시간을 기록하고 있어요")
+            .setContentText("")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pi)
             .build();
@@ -169,7 +181,7 @@ public class AppMonitorService extends Service {
         return String.format(java.util.Locale.KOREAN, "%02d:%02d:%02d", h, m, s);
     }
 
-    private Notification buildCountingNotification(String appName, String contentText, String packageName) {
+    private Notification buildCountingNotification(String appName, long remainingMs, String packageName) {
         PendingIntent pi = PendingIntent.getActivity(this, 0,
             getPackageManager().getLaunchIntentForPackage(getPackageName()),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -178,8 +190,28 @@ public class AppMonitorService extends Service {
         openSheetIntent.putExtra(EXTRA_OPEN_BOTTOM_SHEET, packageName);
         PendingIntent endPi = PendingIntent.getActivity(this, 0, openSheetIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        String contentText = appName + " 사용 중 · " + formatElapsedHhMmSs(remainingMs) + " 남음";
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(appName + " 사용시간")
+            .setContentTitle("앱 사용 시간을 기록하고 있어요")
+            .setContentText(contentText)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentIntent(pi)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "카운트 중지", endPi)
+            .build();
+    }
+
+    /** 복수 세션용: "앱 N개 카운트 중" */
+    private Notification buildCountingNotification(int activeCount) {
+        PendingIntent pi = PendingIntent.getActivity(this, 0,
+            getPackageManager().getLaunchIntentForPackage(getPackageName()),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent openIntent = new Intent(this, MainActivity.class);
+        openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent endPi = PendingIntent.getActivity(this, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        String contentText = "앱 " + activeCount + "개 카운트 중";
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("앱 사용 시간을 기록하고 있어요")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentIntent(pi)
@@ -338,7 +370,7 @@ public class AppMonitorService extends Service {
         }
 
         boolean shouldBlock = false;
-        String overlayState = BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED;
+        String overlayState = BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED;
         if (restriction != null && restriction.getBlockUntilMs() > 0) {
             // 시간 지정 차단
             shouldBlock = System.currentTimeMillis() < restriction.getBlockUntilMs();
@@ -364,11 +396,11 @@ public class AppMonitorService extends Service {
             if (!sessionActive) {
                 // 카운트 정지 상태: 차단 ("카운트 시작" 안내 오버레이)
                 shouldBlock = true;
-                overlayState = BlockOverlayService.OVERLAY_STATE_COUNT_NOT_STARTED;
+                overlayState = BlockDialogActivity.OVERLAY_STATE_COUNT_NOT_STARTED;
             } else if (todayUsageMs >= limitMs) {
                 // 카운트 진행 중 + 사용량 초과: 차단 (timeout 이벤트 기록)
                 shouldBlock = true;
-                overlayState = BlockOverlayService.OVERLAY_STATE_USAGE_EXCEEDED;
+                overlayState = BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED;
                 if (restriction != null) {
                     AppLimitLogRepository.saveTimeoutEventIfNeeded(this, pkg, restriction.getAppName());
                 }
@@ -403,20 +435,10 @@ public class AppMonitorService extends Service {
 
         if (shouldBlock) {
             Log.d(TAG, "차단! " + pkg + " state=" + overlayState);
-            if (!BlockOverlayService.isRunning) {
-                Intent i = new Intent(this, BlockOverlayService.class);
-                i.putExtra(BlockOverlayService.EXTRA_PACKAGE_NAME, pkg);
-                i.putExtra(BlockOverlayService.EXTRA_BLOCK_UNTIL_MS,
-                    restriction != null ? restriction.getBlockUntilMs() : 0L);
-                if (restriction != null && restriction.getBlockUntilMs() <= 0) {
-                    i.putExtra(BlockOverlayService.EXTRA_OVERLAY_STATE, overlayState);
-                    i.putExtra(BlockOverlayService.EXTRA_APP_NAME, restriction.getAppName());
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(i);
-                } else {
-                    startService(i);
-                }
+            if (!BlockDialogActivity.isRunning) {
+                long blockUntilMs = restriction != null ? restriction.getBlockUntilMs() : 0L;
+                String appName = restriction != null ? restriction.getAppName() : pkg;
+                BlockDialogActivity.Companion.start(this, pkg, appName, blockUntilMs, overlayState);
             }
         }
     }

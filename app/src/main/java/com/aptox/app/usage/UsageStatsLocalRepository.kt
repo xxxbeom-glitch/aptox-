@@ -49,6 +49,9 @@ class UsageStatsLocalRepository(private val context: Context) {
 
     fun hasDataForDateBlocking(date: String): Boolean = db.hasDataForDate(date)
 
+    /** 사용 기록이 존재하는 서로 다른 날짜 수 (연속 아님, 누적). 7일치 주간통계 진입 조건용 */
+    fun getDaysWithDataCountBlocking(): Int = db.getDistinctDateCount()
+
     /** 앱 첫 사용일(DB 최소 date) 기준 오늘까지의 누적 일수. 데이터 없으면 0 */
     fun getCumulativeDaysSinceFirstUseBlocking(): Int {
         return try {

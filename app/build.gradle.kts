@@ -28,9 +28,11 @@ android {
             dimension = "distribution"
             buildConfigField("boolean", "SHOW_DEBUG_MENU", "true")
             buildConfigField("boolean", "EXCLUDE_3MIN_OPTION", "false")
+            resValue("string", "app_name", "Aptox Dev")
         }
         create("externalTest") {
             dimension = "distribution"
+            applicationId = "com.aptox.app"
             buildConfigField("boolean", "SHOW_DEBUG_MENU", "false")
             buildConfigField("boolean", "EXCLUDE_3MIN_OPTION", "true")
         }
@@ -39,6 +41,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isCrunchPngs = false  // PNG 리소스 컴파일 오류 회피 (ob_02~04_image 등)
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -53,6 +56,7 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+        resValues = true
     }
 }
 
@@ -71,6 +75,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     implementation(libs.androidx.core.ktx)
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation(libs.androidx.activity.compose)

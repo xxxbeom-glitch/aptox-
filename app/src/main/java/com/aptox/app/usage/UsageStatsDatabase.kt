@@ -101,4 +101,15 @@ class UsageStatsDatabase(context: Context) : SQLiteOpenHelper(
             null
         }
     }
+
+    /** 사용 기록이 존재하는 서로 다른 날짜 수 (연속 아님, 누적). 데이터 없으면 0 */
+    fun getDistinctDateCount(): Int {
+        return try {
+            readableDatabase.rawQuery("SELECT COUNT(DISTINCT date) FROM daily_usage", null).use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getInt(0) else 0
+            }
+        } catch (e: Exception) {
+            0
+        }
+    }
 }

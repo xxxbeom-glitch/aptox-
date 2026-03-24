@@ -226,7 +226,7 @@ fun AppRestrictionHistoryDetailScreen(
                                 dayEvents.forEach { event ->
                                     val eventLabel = when (event.eventType) {
                                         "start" -> "카운트 시작"
-                                        "stop" -> "카운트 정지"
+                                        "stop" -> "카운트 중지"
                                         "release" -> "사용자 제한 해제"
                                         "timeout" -> "시간 소진"
                                         else -> event.eventType
@@ -264,9 +264,6 @@ private fun isAccessibilityEnabled(context: Context): Boolean {
     ) ?: return false
     return enabled.contains(context.packageName)
 }
-
-private fun isOverlayAllowed(context: Context): Boolean =
-    Settings.canDrawOverlays(context)
 
 @Composable
 fun AccountManageScreen(
@@ -537,7 +534,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 SettingsDivider()
                 SettingsRowWithToggle(
                     label = "마감 임박 알림",
-                    subtitle = "일일 한도 1분 전에 미리 알려드려요",
+                    subtitle = "하루 한도 1분 전에 미리 알려드려요",
                     checked = deadlineImminent,
                     onCheckedChange = { deadlineImminent = it },
                     enabled = toggleEnabled,
@@ -569,17 +566,15 @@ fun PermissionSettingsScreen(
     onBack: () -> Unit,
     onAccessibilityClick: () -> Unit,
     onUsageStatsClick: () -> Unit,
-    onOverlayClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val permissionState = remember { mutableStateOf(Triple(false, false, false)) }
+    val permissionState = remember { mutableStateOf(Pair(false, false)) }
 
     fun refreshPermissions() {
-        permissionState.value = Triple(
+        permissionState.value = Pair(
             isAccessibilityEnabled(context),
             StatisticsData.hasUsageAccess(context),
-            isOverlayAllowed(context),
         )
     }
 
@@ -592,7 +587,7 @@ fun PermissionSettingsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val (accessibilityEnabled, usageStatsEnabled, overlayAllowed) = permissionState.value
+    val (accessibilityEnabled, usageStatsEnabled) = permissionState.value
 
     Column(
         modifier = Modifier
@@ -619,15 +614,6 @@ fun PermissionSettingsScreen(
                 badgeAllowed = usageStatsEnabled,
                 subtitle = "사용 시간 측정에 필요해요",
                 onClick = onUsageStatsClick,
-            )
-            SettingsDivider()
-            SettingsRowWithBadge(
-                iconResId = R.drawable.ic_manageaccount,
-                label = "다른 앱 위에 표시",
-                badgeText = if (overlayAllowed) "허용됨" else "허용되지 않음",
-                badgeAllowed = overlayAllowed,
-                subtitle = "차단 화면 표시에 필요해요",
-                onClick = onOverlayClick,
             )
         }
         Spacer(modifier = Modifier.height(24.dp))

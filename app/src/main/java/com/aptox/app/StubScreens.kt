@@ -1052,7 +1052,7 @@ private fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem>
             val (usageText, usageLabel) = when {
                 daysUntil > 0 -> "${daysUntil}일 후 제한 예정" to "예정"
                 remainingMs <= 0 -> "사용 가능한 시간 없음" to ""
-                isCountActive -> formatDurationHhMmSs(remainingMs) to "사용 중"
+                isCountActive -> formatDurationHhMmSs(remainingMs) to "남음"  // remainingMs = 한도에서 0으로 (카운트다운)
                 isEveryDay -> formatDurationHhMmSs(remainingMs) to "남음"
                 else -> formatDurationHhMmSs(remainingMs) to "남음"
             }
@@ -1439,11 +1439,6 @@ fun MainFlowHost(
                                     },
                                     onUsageStatsClick = {
                                         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                                    },
-                                    onOverlayClick = {
-                                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                            .setData(Uri.parse("package:${context.packageName}"))
-                                        context.startActivity(intent)
                                     },
                                 )
                                 SettingsDetail.BugReport -> BugReportScreen(

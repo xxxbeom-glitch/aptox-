@@ -50,14 +50,14 @@ import android.Manifest
 import android.os.Build
 
 /**
- * 앱 사용정보·오버레이·접근성 필수 권한이 모두 허용되었는지 (알림 등 선택 권한 제외).
+ * 앱 사용정보·접근성 필수 권한이 모두 허용되었는지 (알림 등 선택 권한 제외).
+ * 오버레이 권한은 AlertDialog 방식으로 전환되어 더 이상 필요하지 않음.
  */
 fun android.content.Context.areRequiredAppPermissionsGranted(): Boolean {
     val usageGranted = StatisticsData.hasUsageAccess(this)
-    val overlayGranted = Settings.canDrawOverlays(this)
     val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
     val accessibilityGranted = enabled.contains(packageName)
-    return usageGranted && overlayGranted && accessibilityGranted
+    return usageGranted && accessibilityGranted
 }
 
 /**
@@ -84,7 +84,6 @@ fun PermissionScreen(
     }
 
     val usageGranted = remember(refresh) { StatisticsData.hasUsageAccess(context) }
-    val overlayGranted = remember(refresh) { Settings.canDrawOverlays(context) }
     val accessibilityGranted = remember(refresh) {
         val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
         enabled.contains(context.packageName)
@@ -136,18 +135,6 @@ fun PermissionScreen(
                         description = "앱별 사용 시간 측정과 사용 제한 기능 작동에 필요한 권한입니다",
                         onSettingsClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
                         isGranted = usageGranted,
-                    ),
-                    PermissionItem(
-                        iconResId = R.drawable.ic_perm_overlay,
-                        title = "다른 앱 위에 표시 (필수)",
-                        description = "사용 제한 시 안내 화면을 화면 위에 표시하기 위해 필요합니다",
-                        onSettingsClick = {
-                            context.startActivity(
-                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                    .setData(Uri.parse("package:${context.packageName}"))
-                            )
-                        },
-                        isGranted = overlayGranted,
                     ),
                     PermissionItem(
                         iconResId = R.drawable.ic_perm_accessibility,

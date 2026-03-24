@@ -20,7 +20,7 @@ import java.util.Calendar
 object DailyUsageNotificationHelper {
 
     private const val CHANNEL_DAILY_USAGE_ID = "daily_usage_limit"
-    private const val CHANNEL_DAILY_USAGE_NAME = "일일사용량 알림"
+    private const val CHANNEL_DAILY_USAGE_NAME = "하루 사용량 알림"
 
     /** 1. 23:55 리셋 예고 알림 (내일도 동일 앱 제한 스케줄 있을 때만 발송) */
     fun sendResetWarningNotification(context: Context, appName: String, packageName: String) {
@@ -30,7 +30,7 @@ object DailyUsageNotificationHelper {
 
         val pi = launchAppPendingIntent(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_DAILY_USAGE_ID)
-            .setContentTitle("5분 후 $appName 일일사용량 시간이 초기화돼요")
+            .setContentTitle("5분 후 $appName 하루 사용량 시간이 초기화돼요")
             .setContentText(null)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setAutoCancel(true)
@@ -177,7 +177,7 @@ object DailyUsageNotificationHelper {
                 ?: return
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_DAILY_USAGE_ID, CHANNEL_DAILY_USAGE_NAME, NotificationManager.IMPORTANCE_DEFAULT)
-                    .apply { description = "일일사용량 리셋, 제한 경고 알림" },
+                    .apply { description = "하루 사용량 리셋, 제한 경고 알림" },
             )
         }
     }
