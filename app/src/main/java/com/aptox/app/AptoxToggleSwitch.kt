@@ -37,7 +37,11 @@ fun AptoxToggleSwitch(
     enabled: Boolean = true,
 ) {
     val trackColor by animateColorAsState(
-        targetValue = if (checked) AppColors.Primary400 else AppColors.Grey250,
+        targetValue = when {
+            !enabled -> AppColors.Grey200
+            checked -> AppColors.Primary400
+            else -> AppColors.Grey250
+        },
         animationSpec = tween(durationMillis = 200),
         label = "trackColor",
     )

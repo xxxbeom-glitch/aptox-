@@ -480,13 +480,13 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     var countReminder by remember { mutableStateOf(prefs.isCountReminderEnabled(context)) }
     var timeSpecifiedStart by remember { mutableStateOf(prefs.isTimeSpecifiedStartEnabled(context)) }
     var timeSpecifiedEnd by remember { mutableStateOf(prefs.isTimeSpecifiedEndEnabled(context)) }
-    var deviceNotificationsEnabled by remember { mutableStateOf(true) }
+    var deviceNotificationsEnabled by remember {
+        mutableStateOf(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
+    }
 
     fun refreshDeviceNotifications() {
         deviceNotificationsEnabled = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
-
-    LaunchedEffect(Unit) { refreshDeviceNotifications() }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -501,10 +501,6 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { }
 
     val toggleEnabled = deviceNotificationsEnabled
     LaunchedEffect(badgeAcquired, deadlineImminent, countReminder, timeSpecifiedStart, timeSpecifiedEnd) {
@@ -536,13 +532,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 badgeAllowed = deviceNotificationsEnabled,
                 subtitle = if (deviceNotificationsEnabled) "알림을 받으려면 기기 알림 허용이 필요해요" else "기기 알림을 먼저 허용해주세요",
                 onClick = {
-                    if (!deviceNotificationsEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                             putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        })
-                    }
+                        }
+                    )
                 },
             )
 

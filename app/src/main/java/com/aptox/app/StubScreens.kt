@@ -56,6 +56,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -74,10 +78,12 @@ import com.aptox.app.ui.components.AptoxToast
 import com.aptox.app.ui.components.LocalBottomBarHeight
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
+import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Process
 import android.provider.Settings
 import android.util.Log
 import com.google.firebase.functions.FirebaseFunctions
@@ -377,6 +383,108 @@ private fun formatUsageHoursMinutes(ms: Long): String {
         hours > 0 && minutes > 0 -> "${hours}시간 ${minutes}분"
         hours > 0 -> "${hours}시간"
         else -> "${minutes}분"
+    }
+}
+
+/** MA-01: 필수 권한 미허용 상태 홈 화면 (Figma 1410-5548) */
+@Composable
+private fun MainPermissionRequiredContent(
+    userName: String,
+    onPermissionClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        // 인사 + 권한 안내 행
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onPermissionClick,
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "${if (userName.endsWith("님")) userName else "${userName}님"} 안녕하세요.",
+                    style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
+                )
+                Text(
+                    text = "앱 사용을 위해 필수 권한을 허용해 주세요",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextTertiary),
+                )
+            }
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_right),
+                contentDescription = "권한 설정으로 이동",
+                tint = AppColors.TextSecondary,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        // 오늘 사용시간 카드 (데이터 없음 상태)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(6.dp, MainCardShape, false, MainCardShadowColor, MainCardShadowColor)
+                .clip(MainCardShape)
+                .background(AppColors.SurfaceBackgroundCard)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "오늘 스마트폰 사용시간",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextPrimary),
+                )
+                Text(
+                    text = "-",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextSecondary),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(AppColors.Grey150),
+            )
+        }
+        // 권한 안내 카드
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(6.dp, MainCardShape, false, MainCardShadowColor, MainCardShadowColor)
+                .clip(MainCardShape)
+                .background(AppColors.SurfaceBackgroundCard)
+                .padding(start = 16.dp, top = 26.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "필수 권한 허용 필요",
+                    style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
+                )
+                Text(
+                    text = "정확한 통계를 위해 기기 권한 설정이\n반드시 허용되어야 해요",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextTertiary),
+                )
+            }
+            AptoxPrimaryButton(
+                text = "권한 설정으로 이동",
+                onClick = onPermissionClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(6.dp),
+            )
+        }
     }
 }
 
@@ -909,11 +1017,48 @@ internal fun MainScreenMA01(
     onDetailClick: (MainAppRestrictionItem) -> Unit = {},
     onStatisticsClick: () -> Unit = {},
     restrictionRefreshKey: Int = 0,
+    permissionRefreshKey: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // Compose LocalLifecycleOwner는 중첩 시 Activity와 다를 수 있어, Activity 기준으로 감지
+    val lifecycleOwner: LifecycleOwner =
+        (context.findActivity() as? LifecycleOwner) ?: LocalLifecycleOwner.current
     val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(context))
     val greeting by homeViewModel.greeting.collectAsState()
+
+    fun computeHasAllRequiredPermissions(): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        @Suppress("DEPRECATION")
+        val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+        } else {
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+        }
+        val usageOk = (mode == AppOpsManager.MODE_ALLOWED)
+        val accessibilityEnabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        )?.contains(context.packageName) == true
+        return usageOk && accessibilityEnabled
+    }
+
+    var hasAllRequiredPermissions by remember { mutableStateOf(computeHasAllRequiredPermissions()) }
+
+    // 홈 탭 재진입·첫 진입 시마다 재확인 (설정 탭에서 돌아올 때 등)
+    LaunchedEffect(permissionRefreshKey) {
+        hasAllRequiredPermissions = computeHasAllRequiredPermissions()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasAllRequiredPermissions = computeHasAllRequiredPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // 제한 앱 목록 + 빈 상태일 때 top3Apps 함께 로드 (플래시 방지)
     val state by produceState<HomeRestrictionState?>(
@@ -962,7 +1107,12 @@ internal fun MainScreenMA01(
             .padding(top = 24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        if (isRestrictionStateReady && restrictionItems.isEmpty()) {
+        if (!hasAllRequiredPermissions) {
+            MainPermissionRequiredContent(
+                userName = greeting.title,
+                onPermissionClick = onPermissionClick,
+            )
+        } else if (isRestrictionStateReady && restrictionItems.isEmpty()) {
             MainHomeDataEmptyCard(
                 greetingTitle = greeting.title,
                 greetingSubtext = greeting.subtext,
@@ -1357,6 +1507,7 @@ fun MainFlowHost(
     var showAppLimitInfoSheet by remember { mutableStateOf(false) }
     var selectedAppForDetail by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
     var restrictionRefreshKey by remember { mutableIntStateOf(0) }
+    var permissionRefreshKey by remember { mutableIntStateOf(0) }
     /** 필수 권한(사용정보·오버레이·접근성) 미충족 시 앱 제한 추가 대신 표시 */
     var showRequiredPermissionDialog by remember { mutableStateOf(false) }
 
@@ -1545,12 +1696,17 @@ fun MainFlowHost(
                             MainScreenMA01(
                                 onAddAppClick = onAddAppClickGuarded,
                                 onTimeSpecifiedClick = onTimeSpecifiedClickGuarded,
+                                onPermissionClick = {
+                                    navIndex = 3
+                                    settingsDetail = SettingsDetail.Permission
+                                },
                                 onDetailClick = { item ->
                                     selectedAppForDetail = item
                                     showAppLimitInfoSheet = true
                                 },
                                 onStatisticsClick = navigateToStatisticsTab,
                                 restrictionRefreshKey = restrictionRefreshKey,
+                                permissionRefreshKey = permissionRefreshKey,
                             )
                         }
                     }
@@ -1766,8 +1922,31 @@ fun MainFlowHost(
                                     toastMessage = "로그인 후 진행 가능합니다"
                                     return@AptoxBottomNavBar
                                 }
+                                if (it == 2) {
+                                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                                    @Suppress("DEPRECATION")
+                                    val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                        appOps.unsafeCheckOpNoThrow(
+                                            AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                            Process.myUid(),
+                                            context.packageName,
+                                        )
+                                    } else {
+                                        appOps.checkOpNoThrow(
+                                            AppOpsManager.OPSTR_GET_USAGE_STATS,
+                                            Process.myUid(),
+                                            context.packageName,
+                                        )
+                                    }
+                                    if (mode != AppOpsManager.MODE_ALLOWED) {
+                                        toastReplayKey += 1
+                                        toastMessage = "설정 → 권한설정에서 사용 통계 접근을 허용해 주세요"
+                                        return@AptoxBottomNavBar
+                                    }
+                                }
                                 navIndex = it
                                 if (it != 3) settingsDetail = null
+                                if (it == 0) permissionRefreshKey++
                             }
                         },
                         showPremiumBanner = isFreeUser,

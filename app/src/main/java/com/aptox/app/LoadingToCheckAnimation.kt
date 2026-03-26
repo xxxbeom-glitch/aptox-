@@ -49,7 +49,7 @@ object LoadingToCheckColors {
 
 enum class LoadPhase { WAVE, CONVERGE, CHECK }
 
-private const val WAVE_DURATION_MS = 600
+private const val WAVE_DURATION_MS = 1150
 private const val CONVERGE_DURATION_MS = 300
 private const val CHECK_DURATION_MS = 250
 
@@ -84,10 +84,12 @@ fun LoadingToCheckAnimation(
                 onComplete?.invoke()
             }
             true -> {
-                // 체크 모션으로 전환
-                phase = LoadPhase.CONVERGE
+                // 웨이브 → 체크 모션으로 전환 (총 2000ms)
+                phase = LoadPhase.WAVE
                 convergeProgress.snapTo(0f)
                 checkProgress.snapTo(0f)
+                delay(WAVE_DURATION_MS.toLong())
+                phase = LoadPhase.CONVERGE
                 convergeProgress.animateTo(1f, animationSpec = tween(CONVERGE_DURATION_MS, easing = LinearEasing))
                 phase = LoadPhase.CHECK
                 checkProgress.animateTo(1f, animationSpec = tween(CHECK_DURATION_MS, easing = LinearEasing))
