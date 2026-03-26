@@ -445,12 +445,11 @@ private fun DebugUsagePatternAnalysisPreview(onBack: () -> Unit) {
 }
 
 /**
- * 사용패턴 테스트 → 로딩 → 진단 결과까지 이어지는 전체 플로우 디버그 프리뷰.
- * 실제 온보딩과 동일하게 이름 입력 + 7문항 응답 → 로딩 → 결과 화면까지 직접 테스트 가능.
+ * 사용패턴 테스트 → 로딩 → 진단 결과 → 시작하기 전 페이지까지 이어지는 전체 플로우 디버그 프리뷰.
  */
 @Composable
 private fun DebugSelfTestFullFlowPreview(onBack: () -> Unit) {
-    var phase by remember { mutableStateOf(0) } // 0=테스트, 1=로딩, 2=결과
+    var phase by remember { mutableStateOf(0) } // 0=테스트, 1=로딩, 2=결과, 3=시작
     var userName by remember { mutableStateOf("") }
     var answers by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
 
@@ -467,13 +466,14 @@ private fun DebugSelfTestFullFlowPreview(onBack: () -> Unit) {
             onFinish = { phase = 2 },
             userName = userName,
         )
-        2 -> Box(modifier = Modifier.fillMaxSize()) {
-            DiagnosisResultScreen(
-                userName = userName,
-                diagnosisScore = computeDiagnosisScore(answers),
-                onFinish = onBack,
-            )
-        }
+        2 -> DiagnosisResultScreen(
+            userName = userName,
+            diagnosisScore = computeDiagnosisScore(answers),
+            onFinish = { phase = 3 },
+        )
+        3 -> OnboardingStartScreen(
+            onFinish = onBack,
+        )
     }
 }
 

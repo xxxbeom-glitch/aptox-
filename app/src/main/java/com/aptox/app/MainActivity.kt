@@ -117,6 +117,7 @@ enum class SignUpStep {
     SELFTEST_VER2,
     SELFTEST_LOADING,
     USAGE_PATTERN_ANALYSIS,
+    ONBOARDING_START,
     SELFTEST_RESULT,
     ADD_APP,
     TIME_SPECIFIED,
@@ -391,6 +392,9 @@ fun SignUpFlowHost(
                 UserPreferencesRepository(context).userName ?: "아영"
             },
             diagnosisScore = computeDiagnosisScore(selfTestAnswers),
+            onFinish = { step = SignUpStep.ONBOARDING_START },
+        )
+        SignUpStep.ONBOARDING_START -> OnboardingStartScreen(
             onFinish = {
                 scope.launch {
                     firstRunRepo.setOnboardingFlowCompleted(true)

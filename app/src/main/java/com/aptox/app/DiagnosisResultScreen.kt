@@ -150,6 +150,42 @@ fun DiagnosisResultScreen(
                 .padding(bottom = 24.dp),
         ) {
             AptoxPrimaryButton(
+                text = "다음",
+                onClick = onFinish,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** 진단 결과 다음 → 시작하기 전 빈 전환 페이지 */
+@Composable
+fun OnboardingStartScreen(
+    onFinish: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(AppColors.SurfaceBackgroundBackground)
+            .windowInsetsPadding(WindowInsets.statusBars),
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            AptoxPrimaryButton(
                 text = "시작하기",
                 onClick = onFinish,
                 modifier = Modifier.fillMaxWidth(),
