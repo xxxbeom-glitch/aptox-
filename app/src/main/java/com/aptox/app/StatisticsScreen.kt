@@ -67,7 +67,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import androidx.activity.compose.BackHandler
-import com.aptox.app.ui.components.AptoxToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -223,7 +222,6 @@ fun StatisticsScreen(
     var yearOffsetComparison by remember { mutableIntStateOf(0) }
 
     var showHelpSheet by remember { mutableStateOf<StatsHelpType?>(null) }
-    var toastMessage by remember { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = selectedAppDetail != null || showHelpSheet != null) {
         when {
@@ -236,17 +234,16 @@ fun StatisticsScreen(
     var isBriefPullRefreshing by remember { mutableStateOf(false) }
     val pullRefreshScope = rememberCoroutineScope()
 
-    Box(modifier = modifier.fillMaxSize()) {
-        PullToRefreshBox(
-            isRefreshing = isBriefPullRefreshing,
-            onRefresh = {
-                pullRefreshScope.launch {
-                    isBriefPullRefreshing = true
-                    briefRefreshGeneration++
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-        ) {
+    PullToRefreshBox(
+        isRefreshing = isBriefPullRefreshing,
+        onRefresh = {
+            pullRefreshScope.launch {
+                isBriefPullRefreshing = true
+                briefRefreshGeneration++
+            }
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -300,14 +297,6 @@ fun StatisticsScreen(
                 )
                 // 맨 아래 스크롤 시 바텀바로부터 32dp 여백 (padding bottom으로 적용)
             }
-        }
-
-        AptoxToast(
-            message = toastMessage ?: "",
-            visible = toastMessage != null,
-            onDismiss = { toastMessage = null },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
     }
 
     showHelpSheet?.let { helpType ->
@@ -1794,11 +1783,11 @@ private fun StatsTimeSlotSection(
                     s to e
                 }
                 StatisticsData.Tab.MONTHLY -> {
-                    val (s, e, _) = StatisticsData.getLastNDaysRange(30, monthOffset)
+                    val (s, e, _) = StatisticsData.getSingleMonthRange(monthOffset)
                     s to e
                 }
                 StatisticsData.Tab.YEARLY -> {
-                    val (s, e, _) = StatisticsData.getLastNDaysRange(365, yearOffset)
+                    val (s, e, _) = StatisticsData.getSingleYearRange(yearOffset)
                     s to e
                 }
                 else -> {
@@ -1812,11 +1801,11 @@ private fun StatsTimeSlotSection(
                 else -> 0
             }
             timeSlotMinutes = StatisticsData.loadTimeSlot12Minutes(
-                context,
-                startMs,
-                endMs,
-                divideByDays,
-                allowedPackages,
+                context = context,
+                startMs = startMs,
+                endMs = endMs,
+                divideByDays = divideByDays,
+                allowedPackages = allowedPackages,
             )
         }
     }

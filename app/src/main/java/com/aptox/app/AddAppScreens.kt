@@ -59,7 +59,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
-import com.aptox.app.ui.components.AptoxToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -275,10 +274,8 @@ fun AddAppScreenAA02A01(
 
 // ─────────────────────────────────────────────
 // AA-02A-03: 앱 선택 바텀시트 (Figma 238-2311)
-// 검색 필드 + 스크롤 리스트, 최대 1개 선택
+// 검색 필드 + 스크롤 리스트, 단일 선택(라디오)
 // ─────────────────────────────────────────────
-
-private const val MAX_APP_SELECTION = 1
 
 /** 앱 선택 바텀시트에서 표시할 카테고리 (OTT, SNS, 게임, 쇼핑, 웹툰, 주식&코인만. 기타 제외) */
 private val APP_SELECT_ALLOWED_CATEGORIES = setOf("OTT", "SNS", "게임", "쇼핑", "웹툰", "주식,코인", "주식·코인", "주식&코인")
@@ -310,7 +307,6 @@ fun AddAppSelectBottomSheet(
     var appList by remember { mutableStateOf<List<AppSelectItem>>(emptyList()) }
     var isLoadingApps by remember { mutableStateOf(true) }
     var categoryMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var toastMessage by remember { mutableStateOf<String?>(null) }
 
     // 이미 제한 중 + 다른 방식에서 선택된 패키지
     val restrictedPackages = remember(additionalRestrictedPackages) {
@@ -421,12 +417,10 @@ fun AddAppSelectBottomSheet(
     }
 
     fun tryToggleApp(appName: String) {
-        when {
-            appName in selected -> selected = selected - appName
-            selected.size >= MAX_APP_SELECTION -> {
-                toastMessage = "앱은 1개까지만 선택하실 수 있어요"
-            }
-            else -> selected = selected + appName
+        selected = if (appName in selected) {
+            selected - appName
+        } else {
+            setOf(appName)
         }
     }
 
@@ -451,10 +445,11 @@ fun AddAppSelectBottomSheet(
         primaryButtonEnabled = selected.isNotEmpty(),
         modifier = modifier,
     ) {
-        Box(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 400.dp),
+        ) {
             AptoxTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -480,7 +475,7 @@ fun AddAppSelectBottomSheet(
                     val appName = item.name
                     val isSelfApp = item.packageName == context.packageName
                     val isAlreadyRestricted = item.packageName != null && item.packageName in restrictedPackages
-                    val isDisabled = isSelfApp || isAlreadyRestricted || (selected.size >= MAX_APP_SELECTION && appName !in selected)
+                    val isDisabled = isSelfApp || isAlreadyRestricted
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -545,13 +540,6 @@ fun AddAppSelectBottomSheet(
                     }
                 }
             }
-        }
-            AptoxToast(
-                message = toastMessage ?: "",
-                visible = toastMessage != null,
-                onDismiss = { toastMessage = null },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
     }
 }
@@ -846,6 +834,13 @@ private fun getDailyTimeSteps(): List<String> = when {
     BuildConfig.EXCLUDE_3MIN_OPTION -> listOf("180분", "150분", "120분", "90분", "60분", "30분")
     DebugTestSettings.debugShow3MinDailyOption -> listOf("3분", "180분", "150분", "120분", "90분", "60분", "30분")
     else -> listOf("180분", "150분", "120분", "90분", "60분", "30분")
+}
+
+/** 드럼롤 바텀시트: 이미 고른 값이 있으면 그 인덱스, 없으면 기본 60분 */
+private fun dailyDrumrollInitialIndex(steps: List<String>, selectedMinutes: String?): Int {
+    val fromSelection = selectedMinutes?.let { steps.indexOf(it) }?.takeIf { it >= 0 }
+    if (fromSelection != null) return fromSelection
+    return steps.indexOf("60분").takeIf { it >= 0 } ?: 0
 }
 private val DAILY_DURATION_OPTIONS = listOf("오늘 하루만", "1주", "2주", "3주", "4주")
 
@@ -1399,7 +1394,7 @@ fun AddAppFlowHost(
                 val dailySteps = getDailyTimeSteps()
                 DrumrollDurationPickerBottomSheet(
                     items = dailySteps,
-                    initialIndex = dailyLimitMinutes?.let { dailySteps.indexOf(it) }?.takeIf { it >= 0 } ?: 0,
+                    initialIndex = dailyDrumrollInitialIndex(dailySteps, dailyLimitMinutes),
                     title = "하루 사용량을 지정해주세요",
                     subtitle = "사용 시간을 너무 짧게 시작하면 역효과가 생겨요",
                     confirmButtonText = "다음",

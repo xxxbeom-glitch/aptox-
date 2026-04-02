@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -355,40 +353,14 @@ private fun CategorySelectBottomSheet(
     val sheetOptions = remember(appItem.packageName, appItem.currentCategory) {
         buildSheetCategoryOptions(appItem.currentCategory)
     }
-    var selectedIndex by remember(appItem.packageName, appItem.currentCategory) {
-        mutableIntStateOf(0)
-    }
 
-    BaseBottomSheet(
+    DrumrollDurationPickerBottomSheet(
+        items = sheetOptions,
+        initialIndex = 0,
         title = "앱 카테고리를 수정해주세요",
+        subtitle = appItem.appName,
+        confirmButtonText = "저장",
         onDismissRequest = onDismiss,
-        onPrimaryClick = { onSave(sheetOptions[selectedIndex]) },
-        primaryButtonText = "저장",
-        modifier = Modifier,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            sheetOptions.chunked(2).forEach { rowOptions ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    rowOptions.forEach { option ->
-                        val index = sheetOptions.indexOf(option)
-                        Box(modifier = Modifier.weight(1f)) {
-                            AptoxSelectionCardTitleOnly(
-                                title = option,
-                                selected = index == selectedIndex,
-                                onClick = { selectedIndex = index },
-                                titleStyle = AppTypography.BodyMedium,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                    if (rowOptions.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
+        onConfirm = { _, category -> onSave(category) },
+    )
 }

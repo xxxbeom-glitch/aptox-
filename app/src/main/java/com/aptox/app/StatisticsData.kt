@@ -510,6 +510,28 @@ object StatisticsData {
         return Triple(startMs, endMs, label)
     }
 
+    /** 단일 연도 범위: yearOffset 0=올해 1/1 00:00 ~ 12/31 23:59:59.999, -1=작년, +1=내년 */
+    fun getSingleYearRange(yearOffset: Int): Triple<Long, Long, String> {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.YEAR, yearOffset)
+        val year = cal.get(Calendar.YEAR)
+        cal.set(Calendar.MONTH, Calendar.JANUARY)
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val startMs = cal.timeInMillis
+        cal.set(Calendar.MONTH, Calendar.DECEMBER)
+        cal.set(Calendar.DAY_OF_MONTH, 31)
+        cal.set(Calendar.HOUR_OF_DAY, 23)
+        cal.set(Calendar.MINUTE, 59)
+        cal.set(Calendar.SECOND, 59)
+        cal.set(Calendar.MILLISECOND, 999)
+        val endMs = cal.timeInMillis
+        return Triple(startMs, endMs, "${year}년")
+    }
+
     /** 월간: yearOffset 0=올해, -1=작년. 해당 연도의 (startMs, endMs, "YYYY") */
     fun getMonthRange(yearOffset: Int): Triple<Long, Long, String> {
         val cal = Calendar.getInstance()
@@ -986,6 +1008,7 @@ object StatisticsData {
         allowedPackages: Set<String>? = null,
     ): List<Long> {
         if (!hasUsageAccess(context)) return List(12) { 0L }
+        if (allowedPackages != null && allowedPackages.isEmpty()) return List(12) { 0L }
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return List(12) { 0L }
         val events = usm.queryEvents(startMs, endMs) ?: return List(12) { 0L }
         val event = UsageEvents.Event()

@@ -833,7 +833,7 @@ internal fun MainAppRestrictionRow(
     }
 }
 
-/** 카드2: 제한 중인 앱 — 시간 지정 / 일일 사용량 탭 + 목록 + 사용량 제한 앱 추가 (디버그 2카드 스펙) */
+/** 카드2: 제한 중인 앱 — 지정 시간 / 일일 사용량 탭 + 목록 + 사용량 제한 앱 추가 (디버그 2카드 스펙) */
 @Composable
 private fun MainAppRestrictionCard(
     apps: List<MainAppRestrictionItem>,
@@ -875,7 +875,7 @@ private fun MainAppRestrictionCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 HomeRestrictionTabChip(
-                    text = "시간 지정 제한",
+                    text = "지정 시간 제한",
                     selected = restrictionTab == 0,
                     onClick = { restrictionTab = 0 },
                     modifier = Modifier
