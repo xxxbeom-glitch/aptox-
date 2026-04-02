@@ -1,9 +1,17 @@
 package com.aptox.app
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 /**
  * 매일 00:00에 발동. 일일 사용시간(ManualTimerRepository)의 자정 이전 활성 세션 정리.
@@ -15,8 +23,6 @@ class DailyUsageMidnightResetReceiver : BroadcastReceiver() {
         if (intent?.action != ACTION_MIDNIGHT_RESET) return
         try {
             val timerRepo = ManualTimerRepository(context)
-            // 자정 리셋 전에 활성 세션 목록 저장 → 리셋 후 다이얼로그 표시
-            val activeSessions = timerRepo.getAllActiveSessions()
             timerRepo.resetStaleActiveSessionsAtMidnight()
             // 시간 지정 제한: 만료된 항목을 다음날 같은 시각으로 갱신
             val renewed = AppRestrictionRepository(context).renewExpiredTimeSpecifiedRestrictions()
@@ -30,27 +36,88 @@ class DailyUsageMidnightResetReceiver : BroadcastReceiver() {
             DailyUsageMidnightResetScheduler.scheduleNextMidnight(context)
             TimeSpecifiedRestrictionAlarmScheduler.scheduleAll(context)
 
-            // 자정 직전까지 카운트 중이던 앱에 대해 다이얼로그 표시
-            val repo = AppRestrictionRepository(context)
-            for ((pkg, _) in activeSessions) {
-                val restriction = repo.getAll().find { it.packageName == pkg } ?: continue
-                BlockDialogActivity.start(
-                    context,
-                    pkg,
-                    restriction.appName,
-                    0L,
-                    BlockDialogActivity.OVERLAY_STATE_MIDNIGHT_RESET,
-                )
-                Log.d(TAG, "자정 카운트 종료 다이얼로그: $pkg")
-                break // 한 번에 하나만 표시 (다중 앱이면 첫 번째만)
-            }
+            tryShowMidnightForegroundRestrictedBlock(context.applicationContext)
         } catch (e: Throwable) {
             Log.e(TAG, "자정 리셋 실패", e)
         }
     }
 
+    private fun foregroundPackageFromRecentUsageEvents(context: Context): String? {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        val now = System.currentTimeMillis()
+        val events = usm.queryEvents(now - 60_000L, now) ?: return null
+        val selfPkg = context.packageName
+        val foregroundMap = mutableMapOf<String, Long>()
+        val event = UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+            if (pkg == selfPkg) continue
+            when (event.eventType) {
+                UsageEvents.Event.MOVE_TO_FOREGROUND -> foregroundMap[pkg] = event.timeStamp
+                UsageEvents.Event.MOVE_TO_BACKGROUND -> foregroundMap.remove(pkg)
+            }
+        }
+        return foregroundMap.maxByOrNull { it.value }?.key
+    }
+
+    private fun tryShowMidnightForegroundRestrictedBlock(context: Context) {
+        val pkg = foregroundPackageFromRecentUsageEvents(context) ?: return
+        val restriction = AppRestrictionRepository(context).getAll().find { it.packageName == pkg } ?: return
+        if (restriction.blockUntilMs > 0L) return
+        if (PauseRepository(context).isPaused(pkg)) return
+
+        ManualTimerRepository(context).startSession(pkg)
+
+        ensureDailyUsageLimitChannel(context)
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            ?: Intent(context, MainActivity::class.java)
+        val pi = PendingIntent.getActivity(
+            context,
+            NOTIFICATION_ID_MIDNIGHT_FG_USAGE_RESET,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val body =
+            "현재 사용이 진행 중이므로 카운트가 자동으로 시작되었습니다. 원하지 않으시면 앱 종료 후 카운트 중지를 눌러주세요."
+        val notification = NotificationCompat.Builder(context, CHANNEL_DAILY_USAGE_LIMIT_ID)
+            .setContentTitle("${restriction.appName}의 하루 사용량이 초기화되었습니다")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        nm.notify(NOTIFICATION_ID_MIDNIGHT_FG_USAGE_RESET, notification)
+        Log.d(TAG, "자정 포그라운드 일일제한앱 노티: $pkg")
+    }
+
+    /** [DailyUsageNotificationHelper] 와 동일 채널 id — 이미 있으면 무시 */
+    private fun ensureDailyUsageLimitChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        nm.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_DAILY_USAGE_LIMIT_ID,
+                CHANNEL_DAILY_USAGE_LIMIT_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = "하루 사용량 리셋, 제한 경고 알림" },
+        )
+    }
+
     companion object {
         private const val TAG = "DailyUsageMidnight"
         const val ACTION_MIDNIGHT_RESET = "com.aptox.app.MIDNIGHT_DAILY_USAGE_RESET"
+
+        /** [DailyUsageNotificationHelper] 채널 id 와 동일 (`daily_usage_limit`) */
+        private const val CHANNEL_DAILY_USAGE_LIMIT_ID = "daily_usage_limit"
+        private const val CHANNEL_DAILY_USAGE_LIMIT_NAME = "하루 사용량 알림"
+
+        /** AppMonitor 1001/1002, PauseTimer 1003, DailyUsage 해시 id와 겹치지 않게 고정 */
+        private const val NOTIFICATION_ID_MIDNIGHT_FG_USAGE_RESET = 2405
     }
 }

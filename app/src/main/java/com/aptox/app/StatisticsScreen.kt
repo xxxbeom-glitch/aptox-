@@ -926,15 +926,15 @@ private fun ChartYAxisLabels(
 
 /** 분 단위 값을 차트 Y축 레이블로 포맷 (60분 이상이면 "XH", 6만분 이상이면 "X천H") */
 private fun formatChartYLabel(minutes: Long): String = when {
-    minutes <= 0 -> "0"
+    minutes <= 0 -> "0H"
     minutes >= 60_000 -> "${(minutes + 30_000) / 60_000}천H"
     minutes >= 60 -> "${minutes / 60}H"
     else -> "$minutes"
 }
 
-/** 기간별 사용량 Y축 고정: 0~8H (주간/월간/연간 동일) */
-private val PeriodChartFixedYTicks = listOf(0L, 120L, 240L, 360L, 480L) // 0, 2H, 4H, 6H, 8H
-private val PeriodChartFixedMaxMinutes = 480L // 8H
+/** 기간별 사용량 Y축 고정: 균등 간격 라벨 0H~16H (주간/월간/연간 동일). 막대 높이는 16H 기준 정규화 */
+private val PeriodChartFixedYTicks = listOf(0L, 240L, 480L, 720L, 960L) // 0, 4H, 8H, 12H, 16H
+private val PeriodChartFixedMaxMinutes = 960L // 16H
 
 /** 시간대별 사용량 전용: Y축 0, 1H, 2H (3개 고정) */
 private fun computeTimeSlotYTicks(): List<Long> = listOf(0L, 60L, 120L)

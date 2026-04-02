@@ -79,6 +79,11 @@ class AptoxAccessibilityService : AccessibilityService() {
             ) {
                 DailyUsageNotificationHelper.sendLimitReachedNotification(this, restriction.appName, pkg)
             }
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(homeIntent)
             BlockDialogActivity.start(this, pkg, restriction.appName, restriction.blockUntilMs, overlayState)
         }
     }

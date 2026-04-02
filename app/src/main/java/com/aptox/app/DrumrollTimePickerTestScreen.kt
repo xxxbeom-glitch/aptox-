@@ -37,7 +37,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -296,9 +300,24 @@ private fun DrumrollColumn(
     val centerFirst = if (scrollOffset > cellHeightPx / 2f) firstVisible + 1 else firstVisible
     val highlightIndex = (centerFirst + padding).coerceIn(0, paddedItems.lastIndex)
 
+    val consumeVerticalForSheet = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // LazyColumn 스크롤 후 남은 세로 델타를 소비해 ModalBottomSheet 드래그로 전파되지 않게 함
+                return Offset(0f, available.y)
+            }
+        }
+    }
+
     LazyColumn(
         state = listState,
-        modifier = modifier.height(CELL_HEIGHT * VISIBLE_CELLS),
+        modifier = modifier
+            .height(CELL_HEIGHT * VISIBLE_CELLS)
+            .nestedScroll(consumeVerticalForSheet),
         horizontalAlignment = Alignment.CenterHorizontally,
         userScrollEnabled = true,
     ) {

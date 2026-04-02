@@ -35,6 +35,9 @@ class ManualTimerRepository(private val context: Context) {
         return cal.timeInMillis
     }
 
+    /** 오늘 자정 시각(ms). 외부(모니터 서비스 등)에서 자정 직후 구간 판별용. */
+    fun getTodayMidnightMs(): Long = todayMidnightMs()
+
     private fun accumKey(packageName: String): String = "accum_${packageName}_${todayKey()}"
     private fun activeKey(packageName: String): String = "active_$packageName"
 
@@ -138,6 +141,13 @@ class ManualTimerRepository(private val context: Context) {
     /** 현재 카운트 진행 중 여부 */
     fun isSessionActive(packageName: String): Boolean =
         prefs.getLong(activeKey(packageName), -1L) >= 0
+
+    /**
+     * 해당 패키지 활성 세션 시작 시각(ms). 없으면 -1.
+     * [isSessionActive]와 동일 키; 값이 0보다 크면 카운트 진행 중으로 볼 수 있음.
+     */
+    fun getActiveSessionStartMs(packageName: String): Long =
+        prefs.getLong(activeKey(packageName), -1L)
 
     /**
      * 오늘 누적 사용량 강제 설정 (분 단위). 디버그 테스트용.

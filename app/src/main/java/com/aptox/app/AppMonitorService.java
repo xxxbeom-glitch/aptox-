@@ -15,6 +15,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,6 +67,7 @@ public class AppMonitorService extends Service {
             initForegroundPkg();
             scheduleEventCheck();
             scheduleNotificationUpdate();
+            updateNotificationIfCounting();
         } else {
             handler.removeCallbacksAndMessages(null);
             if (clearForegroundPkg) {
@@ -126,6 +128,8 @@ public class AppMonitorService extends Service {
         long now = System.currentTimeMillis();
         List<android.util.Pair<String, Long>> timeSpecActive = getActiveTimeSpecifiedInWindow(now);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManagerCompat nmCompat = NotificationManagerCompat.from(this);
+
         if (!sessions.isEmpty()) {
             Notification n;
             if (sessions.size() == 1) {
@@ -140,7 +144,23 @@ public class AppMonitorService extends Service {
                 n = buildCountingNotification(sessions.size());
             }
             startForeground(NOTIFICATION_ID, n);
-        } else if (!timeSpecActive.isEmpty()) {
+        } else if (!currentRestrictionMap.isEmpty()) {
+            startForeground(NOTIFICATION_ID, buildDefaultNotification());
+            CountReminderAlarmScheduler.INSTANCE.cancel(this);
+            scheduledCountReminderPkg = null;
+        } else {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            if (nm != null) nm.cancel(NOTIFICATION_ID);
+            nmCompat.cancel(NOTIFICATION_ID_TIME_SPEC);
+            CountReminderAlarmScheduler.INSTANCE.cancel(this);
+            scheduledCountReminderPkg = null;
+            isRunning = false;
+            handler.removeCallbacksAndMessages(null);
+            stopSelf();
+            return;
+        }
+
+        if (!timeSpecActive.isEmpty()) {
             Notification n;
             if (timeSpecActive.size() == 1) {
                 String pkg = timeSpecActive.get(0).first;
@@ -150,21 +170,14 @@ public class AppMonitorService extends Service {
             } else {
                 n = buildTimeSpecifiedNotification(timeSpecActive.size());
             }
-            startForeground(NOTIFICATION_ID, n);
-            CountReminderAlarmScheduler.INSTANCE.cancel(this);
-            scheduledCountReminderPkg = null;
-        } else if (!currentRestrictionMap.isEmpty()) {
-            startForeground(NOTIFICATION_ID, buildDefaultNotification());
-            CountReminderAlarmScheduler.INSTANCE.cancel(this);
-            scheduledCountReminderPkg = null;
+            nmCompat.notify(NOTIFICATION_ID_TIME_SPEC, n);
         } else {
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            if (nm != null) nm.cancel(NOTIFICATION_ID);
+            nmCompat.cancel(NOTIFICATION_ID_TIME_SPEC);
+        }
+
+        if (sessions.isEmpty()) {
             CountReminderAlarmScheduler.INSTANCE.cancel(this);
             scheduledCountReminderPkg = null;
-            isRunning = false;
-            handler.removeCallbacksAndMessages(null);
-            stopSelf();
         }
     }
 
@@ -172,8 +185,6 @@ public class AppMonitorService extends Service {
         ManualTimerRepository timerRepo = new ManualTimerRepository(this);
         java.util.List<kotlin.Pair<String, Long>> sessions =
                 filterSessionsWithRemainingMs(timerRepo, timerRepo.getAllActiveSessions());
-        long now = System.currentTimeMillis();
-        List<android.util.Pair<String, Long>> timeSpecActive = getActiveTimeSpecifiedInWindow(now);
         if (!sessions.isEmpty()) {
             if (sessions.size() == 1) {
                 String pkg = sessions.get(0).getFirst();
@@ -186,15 +197,6 @@ public class AppMonitorService extends Service {
             } else {
                 return buildCountingNotification(sessions.size());
             }
-        }
-        if (!timeSpecActive.isEmpty()) {
-            if (timeSpecActive.size() == 1) {
-                String pkg = timeSpecActive.get(0).first;
-                long blockUntil = timeSpecActive.get(0).second;
-                String appName = getAppNameForPackage(pkg);
-                return buildTimeSpecifiedNotification(appName, blockUntil);
-            }
-            return buildTimeSpecifiedNotification(timeSpecActive.size());
         }
         return buildDefaultNotification();
     }
@@ -328,6 +330,7 @@ public class AppMonitorService extends Service {
         isRunning = false;
         handler.removeCallbacksAndMessages(null);
         stopForeground(STOP_FOREGROUND_REMOVE);
+        NotificationManagerCompat.from(this).cancel(NOTIFICATION_ID_TIME_SPEC);
     }
 
     private void scheduleEventCheck() {
@@ -481,6 +484,7 @@ public class AppMonitorService extends Service {
         }
 
         boolean shouldBlock = false;
+        boolean fromDailyUsageBranch = false;
         String overlayState = BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED;
         if (restriction != null && restriction.getBlockUntilMs() > 0) {
             // 시간 지정 차단: startTimeMs 이전이면 아직 제한 시작 전 → 차단하지 않음
@@ -498,6 +502,7 @@ public class AppMonitorService extends Service {
                 Log.d(TAG, "시간 지정 차단 종료: " + pkg);
             }
         } else {
+            fromDailyUsageBranch = true;
             // 일일 사용량 차단: 수동 타이머(ManualTimerRepository) 기준. 홈 카드(StubScreens)와 동일.
             // UsageStatsManager는 카운트 정지 후에도 당일 포그라운드 시간이 남아 즉시 초과 차단되는 버그가 있었음.
             int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
@@ -546,11 +551,26 @@ public class AppMonitorService extends Service {
             }
         }
 
+        if (shouldBlock && fromDailyUsageBranch) {
+            ManualTimerRepository midnightSkipRepo = new ManualTimerRepository(this);
+            long nowMs = System.currentTimeMillis();
+            long todayMidnightMs = midnightSkipRepo.getTodayMidnightMs();
+            if (nowMs - todayMidnightMs <= 2L * 60 * 1000L
+                    && midnightSkipRepo.getActiveSessionStartMs(pkg) > 0L) {
+                shouldBlock = false;
+                Log.d(TAG, "자정 직후 2분 이내 + 활성 세션 - 일일 차단 스킵: " + pkg);
+            }
+        }
+
         if (shouldBlock) {
             Log.d(TAG, "차단! " + pkg + " state=" + overlayState);
             if (!BlockDialogActivity.isRunning) {
                 long blockUntilMs = restriction != null ? restriction.getBlockUntilMs() : 0L;
                 String appName = restriction != null ? restriction.getAppName() : pkg;
+                Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+                homeIntent.addCategory(Intent.CATEGORY_HOME);
+                homeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(homeIntent);
                 BlockDialogActivity.Companion.start(this, pkg, appName, blockUntilMs, overlayState);
             }
         }
@@ -585,6 +605,7 @@ public class AppMonitorService extends Service {
 
     private static final String CHANNEL_ID = "app_monitor";
     private static final int NOTIFICATION_ID = 1001;
+    private static final int NOTIFICATION_ID_TIME_SPEC = 1002;
     private static final long EVENT_CHECK_INTERVAL_MS = 1_000L;
     private static final String SEP_ITEM = "|";
     private static final String SEP_KV = ":";
