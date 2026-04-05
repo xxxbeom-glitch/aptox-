@@ -9,26 +9,43 @@ import com.aptox.app.BuildConfig
 
 object SubscriptionManager {
 
-    // 디버그 강제 설정 (개발/테스트용)
-    // 릴리즈 빌드에선 이 값이 무시됨
+    /**
+     * Google Play 프리미엄 구독을 사용자에게 공개할 때 `true`로 바꿉니다.
+     * `false`인 동안에는 스토어·DataStore와 무관하게 **무료 플랜만** 적용합니다(DEBUG의 [debugForceSubscribed] 제외).
+     */
+    const val PREMIUM_OFFERING_LIVE: Boolean = false
+
+    // 디버그 강제 설정 (개발/테스트용) — true면 항상 구독으로 간주
     var debugForceSubscribed: Boolean = false
 
-    /**
-     * 현재 구독 상태 반환
-     * - DEBUG 빌드: debugForceSubscribed 값 사용
-     * - RELEASE 빌드: 실제 Play Store 구독 여부 확인
-     */
-    fun isSubscribed(context: Context): Boolean {
-        if (BuildConfig.DEBUG) {
-            return debugForceSubscribed
-        }
-        return checkRealSubscription(context)
+    @Volatile
+    private var subscribedFromDataStore: Boolean = false
+
+    /** [PremiumStatusRepository] 플로우에서 동기 갱신 (UI·기능 분기용) */
+    internal fun setSubscribedFromDataStore(value: Boolean) {
+        subscribedFromDataStore = value
     }
 
-    // TODO: Play Store Billing 연동 후 실제 구독 확인 로직 구현
-    private fun checkRealSubscription(context: Context): Boolean {
-        return false // 기본값: 미구독
+    /**
+     * Compose 등에서 DataStore 플로우 값과 동일한 규칙으로 구독 여부를 계산할 때 사용.
+     */
+    fun isSubscribedWithStore(storePremium: Boolean, context: Context): Boolean {
+        if (!PREMIUM_OFFERING_LIVE) {
+            if (BuildConfig.DEBUG && debugForceSubscribed) return true
+            return false
+        }
+        if (BuildConfig.DEBUG && debugForceSubscribed) return true
+        return storePremium
     }
+
+    /**
+     * 현재 구독 상태 (기능 게이트)
+     * - [PREMIUM_OFFERING_LIVE]가 false면 (디버그 강제 제외) 항상 미구독
+     * - DEBUG + [debugForceSubscribed]: true
+     * - 그 외: Billing 복원 후 [PremiumStatusRepository] 값
+     */
+    fun isSubscribed(context: Context): Boolean =
+        isSubscribedWithStore(subscribedFromDataStore, context)
 }
 
 

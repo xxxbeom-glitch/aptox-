@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 
 /**
  * 구독 결제 진입 바텀시트 (Figma 1566-4815 연간 선택 / 1574-4881 월간 선택).
- * UI 전용 — 결제·스토어 연동 없음.
+ * 연간/월간 카드는 선택 상태만 바꾸고, 하단 CTA에서만 [onSubscribe]로 Play 결제 플로우 연결.
  */
 enum class SubscriptionPlanTier {
     Annual,
@@ -64,7 +64,7 @@ fun SubscriptionBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     initialPlan: SubscriptionPlanTier = SubscriptionPlanTier.Annual,
-    onStartSubscriptionClick: (SubscriptionPlanTier) -> Unit = {},
+    onSubscribe: (SubscriptionPlanTier) -> Unit = {},
 ) {
     var selected by remember(initialPlan) { mutableStateOf(initialPlan) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -117,7 +117,7 @@ fun SubscriptionBottomSheet(
                     SubscriptionPlanTier.Monthly -> "프리미엄 월간 구독 시작하기"
                 },
                 onClick = {
-                    onStartSubscriptionClick(selected)
+                    onSubscribe(selected)
                     onDismissRequest()
                 },
                 modifier = Modifier.fillMaxWidth(),

@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -66,6 +67,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.activity.ComponentActivity
+import com.aptox.app.BuildConfig
+import com.aptox.app.subscription.PremiumStatusRepository
+import com.aptox.app.subscription.SubscriptionBillingController
+import com.aptox.app.subscription.SubscriptionManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.BackHandler
@@ -1555,7 +1561,6 @@ fun MainFlowHost(
     onAddAppClick: (com.aptox.app.model.SelectedAppInfo?) -> Unit,
     onTimeSpecifiedClick: (com.aptox.app.model.SelectedAppInfo?) -> Unit = {},
     onLogout: () -> Unit,
-    isFreeUser: Boolean = true,
     initialPauseFlowFromOverlay: PendingPauseFlowFromOverlay? = null,
     onPauseFlowConsumed: () -> Unit = {},
     /** 일일 사용량 제한 완료 후 "카운트 시작하기" 탭 시 자동으로 바텀시트를 열 packageName */
@@ -1566,6 +1571,12 @@ fun MainFlowHost(
     onNavIndexConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val premiumFromStore by PremiumStatusRepository.subscribedFlow(context.applicationContext)
+        .collectAsState(initial = false)
+    val isFreeUser = !SubscriptionManager.isSubscribedWithStore(premiumFromStore, context.applicationContext)
+    /** Play·DataStore에 활성 구독이 없을 때만 하단 유도 배너 (프리미엄 오픈 전에도 스토어 구독이면 숨김) */
+    val showPremiumUpsellBanner =
+        !premiumFromStore && !(BuildConfig.DEBUG && SubscriptionManager.debugForceSubscribed)
     val authRepository = remember { AuthRepository() }
     val firebaseAnalytics = remember {
         FirebaseAnalytics.getInstance(context.applicationContext)
@@ -1748,7 +1759,8 @@ fun MainFlowHost(
     var bottomBarHeightPx by remember { mutableIntStateOf(0) }
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
     // 시스템 네비바 영역 채움: 프리미엄 배너(#2B2B2B) / 유료(카드 배경)
-    val bottomFillColor = if (isFreeUser) Color(0xFF2B2B2B) else AppColors.SurfaceBackgroundCard
+    val bottomFillColor =
+        if (showPremiumUpsellBanner) Color(0xFF2B2B2B) else AppColors.SurfaceBackgroundCard
 
     val onAddAppClickGuarded: (com.aptox.app.model.SelectedAppInfo?) -> Unit = { app ->
         if (context.areRequiredAppPermissionsGranted()) {
@@ -2011,7 +2023,17 @@ fun MainFlowHost(
                                     onAccountManageClick = { settingsDetail = SettingsDetail.AccountManage },
                                     onAppCategoryEditClick = { settingsDetail = SettingsDetail.AppCategoryEdit },
                                     onAppRestrictionHistoryClick = { settingsDetail = SettingsDetail.AppRestrictionHistory },
-                                    onSubscriptionManageClick = { settingsDetail = SettingsDetail.Subscription },
+                                    onSubscriptionManageClick = {
+                                        if (SubscriptionManager.isSubscribedWithStore(
+                                                premiumFromStore,
+                                                context.applicationContext,
+                                            )
+                                        ) {
+                                            settingsDetail = SettingsDetail.Subscription
+                                        } else {
+                                            showSubscriptionBottomSheet = true
+                                        }
+                                    },
                                     onNotificationClick = { settingsDetail = SettingsDetail.Notification },
                                     onPermissionClick = { settingsDetail = SettingsDetail.Permission },
                                     onBugReportClick = { settingsDetail = SettingsDetail.BugReport },
@@ -2097,8 +2119,8 @@ fun MainFlowHost(
                                 if (it == 0) permissionRefreshKey++
                             }
                         },
-                        showPremiumBanner = isFreeUser,
-                        onPremiumClick = { if (isFreeUser) showSubscriptionBottomSheet = true },
+                        showPremiumBanner = showPremiumUpsellBanner,
+                        onPremiumClick = { if (showPremiumUpsellBanner) showSubscriptionBottomSheet = true },
                     )
                 }
 
@@ -2315,9 +2337,17 @@ fun MainFlowHost(
     }
 
     if (showSubscriptionBottomSheet) {
+        val activity = context as? ComponentActivity
         SubscriptionBottomSheet(
             onDismissRequest = { showSubscriptionBottomSheet = false },
-            onStartSubscriptionClick = { showSubscriptionBottomSheet = false },
+            onSubscribe = { tier ->
+                if (SubscriptionManager.isSubscribed(context.applicationContext)) {
+                    toastReplayKey += 1
+                    toastMessage = "이미 구독 중입니다"
+                } else {
+                    activity?.let { SubscriptionBillingController.launchSubscriptionFlow(it, tier) }
+                }
+            },
         )
     }
 

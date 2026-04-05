@@ -5,10 +5,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.widget.RemoteViews
 
-/**
- * 홈 화면 **4×2** 위젯 (2행 목록 / 빈 상태). Figma 1551-4677 등.
- */
-class AptoxHomeWidget4x2Provider : AppWidgetProvider() {
+/** 홈 화면 「하루 사용 제한」 위젯 (Figma 1619:5438). */
+class AptoxDailyLimitWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(
         context: Context,
@@ -16,8 +14,8 @@ class AptoxHomeWidget4x2Provider : AppWidgetProvider() {
         appWidgetIds: IntArray,
     ) {
         for (id in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.widget_aptox_home)
-            AptoxHomeWidgetBinder.bindDailyWithSampleRows4x2(context, views)
+            val views = RemoteViews(context.packageName, R.layout.widget_daily_limit)
+            AptoxHomeWidgetBinder.bindDailyLimitWithSample(context, views)
             appWidgetManager.updateAppWidget(id, views)
         }
     }

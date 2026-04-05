@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/widget_aptox_home_4x2_description"
-    android:initialLayout="@layout/widget_aptox_home"
+    android:description="@string/widget_daily_limit_description"
+    android:initialLayout="@layout/widget_daily_limit"
     android:minWidth="250dp"
-    android:minHeight="152dp"
-    android:previewLayout="@layout/widget_aptox_home"
+    android:minHeight="136dp"
+    android:previewLayout="@layout/widget_daily_limit"
     android:resizeMode="none"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

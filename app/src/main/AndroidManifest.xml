@@ -87,26 +87,15 @@
             android:exported="false" />
 
         <receiver
-            android:name=".AptoxHomeWidget4x2Provider"
+            android:name=".AptoxDailyLimitWidgetProvider"
             android:exported="true"
-            android:label="@string/widget_aptox_home_4x2_label">
+            android:label="@string/widget_title_daily_limit">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/aptox_home_widget_4x2_info" />
-        </receiver>
-        <receiver
-            android:name=".AptoxHomeWidget4x1Provider"
-            android:exported="true"
-            android:label="@string/widget_aptox_home_4x1_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/aptox_home_widget_4x1_info" />
+                android:resource="@xml/aptox_daily_limit_widget_info" />
         </receiver>
         <receiver
             android:name=".CountReminderAlarmReceiver"

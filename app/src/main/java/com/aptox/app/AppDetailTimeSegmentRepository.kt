@@ -7,7 +7,7 @@ import java.util.Calendar
 
 /**
  * 앱 상세 바텀시트 — [startMs], [endMs] 구간 기준 **2시간 구간 12개**(0~2, 2~4, … 22~24시)별 일평균 사용량을 [queryEvents]로 집계.
- * 사용이 **있는** 구간만 서로 비교해 순위 톤(1~4위: #6C54DD 100% / 80% / 40% / 20% 알파), 사용 없음(일평균 0)은 Grey 350(MUTED).
+ * 막대 색은 슬롯별 일평균을 **해당 앱 구간 내 최대값 대비 비율**로 정규화해 톤을 정함([mapAveragesToRankTones]).
  */
 object AppDetailTimeSegmentRepository {
 
@@ -116,28 +116,26 @@ object AppDetailTimeSegmentRepository {
     }
 
     /**
-     * 슬롯별 일평균 ms: **0이면 MUTED**. 0 초과 슬롯만 고유값 내림차순 순위로 톤(동일 ms 동일 톤).
-     * 5순위 이하도 20% 알파(else).
+     * 슬롯별 일평균 ms를 **12슬롯 중 max** 대비 비율 `t = v/max`로 정규화해 톤 결정.
+     * - `max == 0` → 전부 MUTED
+     * - `max > 0`일 때 각 슬롯 `v`: `v <= 0` 또는 `t < 0.2` → MUTED
+     * - `t >= 0.75` → PRIMARY_FULL, `>= 0.5` → PRIMARY_80, `>= 0.2` → PRIMARY_40
      */
     internal fun mapAveragesToRankTones(avgMsPerSlot: LongArray): List<AppDetailAverageTimeSlotBarTone> {
         require(avgMsPerSlot.size == TWO_HOUR_SLOT_COUNT)
-        if (avgMsPerSlot.all { it == 0L }) {
+        val max = avgMsPerSlot.maxOrNull() ?: 0L
+        if (max == 0L) {
             return List(TWO_HOUR_SLOT_COUNT) { AppDetailAverageTimeSlotBarTone.MUTED }
         }
-        val distinctSortedNonZero = avgMsPerSlot
-            .asSequence()
-            .filter { it > 0L }
-            .distinct()
-            .sortedDescending()
-            .toList()
-        fun toneFor(avg: Long): AppDetailAverageTimeSlotBarTone {
-            if (avg <= 0L) return AppDetailAverageTimeSlotBarTone.MUTED
-            val rank = distinctSortedNonZero.indexOf(avg)
-            return when (rank) {
-                0 -> AppDetailAverageTimeSlotBarTone.PRIMARY_FULL
-                1 -> AppDetailAverageTimeSlotBarTone.PRIMARY_80
-                2 -> AppDetailAverageTimeSlotBarTone.PRIMARY_40
-                else -> AppDetailAverageTimeSlotBarTone.PRIMARY_20
+        val maxF = max.toFloat()
+        fun toneFor(v: Long): AppDetailAverageTimeSlotBarTone {
+            if (v <= 0L) return AppDetailAverageTimeSlotBarTone.MUTED
+            val t = v.toFloat() / maxF
+            if (t < 0.20f) return AppDetailAverageTimeSlotBarTone.MUTED
+            return when {
+                t >= 0.75f -> AppDetailAverageTimeSlotBarTone.PRIMARY_FULL
+                t >= 0.50f -> AppDetailAverageTimeSlotBarTone.PRIMARY_80
+                else -> AppDetailAverageTimeSlotBarTone.PRIMARY_40
             }
         }
         return List(TWO_HOUR_SLOT_COUNT) { i -> toneFor(avgMsPerSlot[i]) }

@@ -13,7 +13,11 @@ import com.aptox.app.usage.DailyUsageFirestoreRepository
 import com.aptox.app.usage.UsageStatsSyncWorker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.aptox.app.subscription.PremiumStatusRepository
+import com.aptox.app.subscription.SubscriptionBillingController
+import com.aptox.app.subscription.SubscriptionManager
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import java.util.concurrent.TimeUnit
 
 class AptoxApplication : Application() {
@@ -33,6 +37,14 @@ class AptoxApplication : Application() {
             )
         }
         NotificationPreferences.migrateIfNeeded(this)
+        applicationScope.launch {
+            val initial = PremiumStatusRepository.readSubscribed(this@AptoxApplication)
+            SubscriptionManager.setSubscribedFromDataStore(initial)
+            PremiumStatusRepository.subscribedFlow(this@AptoxApplication).collect { sub ->
+                SubscriptionManager.setSubscribedFromDataStore(sub)
+            }
+        }
+        SubscriptionBillingController.initialize(this, applicationScope)
         BriefDailyAlarmScheduler.schedule(this)
         scheduleUsageStatsSync()
         applicationScope.launch {

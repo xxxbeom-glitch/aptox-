@@ -17,7 +17,7 @@ android {
         applicationId = "com.aptox.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
+        versionCode = 16
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -104,6 +104,9 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Google Play Billing (구독)
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
 
     // WorkManager + Room/Startup (명시 버전으로 전이 의존성 정렬 — WorkDatabase 초기화 안정화)
     // work-runtime-ktx 2.10.2는 Room 2.6.x와 함께 빌드됨. Room 2.6.1과 동일 계열로 유지할 것.

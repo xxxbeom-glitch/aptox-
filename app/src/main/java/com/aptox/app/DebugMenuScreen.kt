@@ -1,6 +1,5 @@
 package com.aptox.app
 
-import com.aptox.app.subscription.SubscriptionManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -266,7 +265,6 @@ private fun DebugScreenPreview(
         DebugScreen.MainFlow -> MainFlowHost(
             onAddAppClick = { onNavigateToScreen(DebugScreen.AddAppFlowHost) },
             onLogout = { onBack() },
-            isFreeUser = !SubscriptionManager.isSubscribed(LocalContext.current),
             initialPauseFlowFromOverlay = pendingPauseFlowFromOverlay,
             onPauseFlowConsumed = onPauseFlowConsumed,
             initialAutoOpenPackage = pendingOpenBottomSheetPackage,
@@ -402,6 +400,7 @@ private fun DebugScreenPreview(
         DebugScreen.SubscriptionBottomSheet -> DebugBottomSheetPreview(onBack = onBack) { onSheetDismiss ->
             SubscriptionBottomSheet(
                 onDismissRequest = onSheetDismiss,
+                onSubscribe = { onSheetDismiss() },
             )
         }
         DebugScreen.Permission -> PermissionScreen(

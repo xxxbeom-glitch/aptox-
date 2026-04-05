@@ -39,6 +39,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +52,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import android.content.Context
 import android.provider.Settings
 import com.aptox.app.StatisticsData
+import com.aptox.app.subscription.PremiumSnapshot
+import com.aptox.app.subscription.PremiumStatusRepository
+import com.aptox.app.subscription.SubscriptionBillingController
+import com.aptox.app.subscription.SubscriptionManager
+import com.aptox.app.subscription.SubscriptionRenewalMessage
 import java.text.Collator
 import java.util.Locale
 
@@ -450,7 +456,24 @@ private fun SocialAccountCard(
 }
 
 @Composable
-fun SubscriptionManageScreen() {
+fun SubscriptionManageScreen(
+    onOpenPremiumOffer: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    val premiumFromStore by PremiumStatusRepository.subscribedFlow(context.applicationContext)
+        .collectAsState(initial = false)
+    val premiumSnapshot by PremiumStatusRepository.premiumSnapshotFlow(context.applicationContext)
+        .collectAsState(
+            initial = PremiumSnapshot(
+                subscribed = false,
+                expiryEpochMillis = 0L,
+                autoRenewing = true,
+                basePlanId = null,
+            ),
+        )
+    val subscribed =
+        SubscriptionManager.isSubscribedWithStore(premiumFromStore, context.applicationContext)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,7 +484,39 @@ fun SubscriptionManageScreen() {
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 
-        // 구독 플랜 카드
+        when {
+            !SubscriptionManager.PREMIUM_OFFERING_LIVE -> {
+                SubscriptionManageFreePlanSection(
+                    onOpenPremiumOffer = onOpenPremiumOffer,
+                    preLaunchCopy = true,
+                )
+            }
+            subscribed -> {
+                SubscriptionManageSubscribedPlanSection(
+                    renewalOrExpiryLine = SubscriptionRenewalMessage.renewalOrExpiryLine(
+                        premiumSnapshot.expiryEpochMillis,
+                        premiumSnapshot.autoRenewing,
+                    ),
+                    basePlanId = premiumSnapshot.basePlanId,
+                )
+            }
+            else -> {
+                SubscriptionManageFreePlanSection(
+                    onOpenPremiumOffer = onOpenPremiumOffer,
+                    preLaunchCopy = false,
+                )
+            }
+        }
+    }
+}
+
+/** 무료 플랜 — 유료 미오픈 시·미구독 시 */
+@Composable
+private fun SubscriptionManageFreePlanSection(
+    onOpenPremiumOffer: () -> Unit,
+    preLaunchCopy: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -470,24 +525,94 @@ fun SubscriptionManageScreen() {
                 .padding(horizontal = 18.dp, vertical = 22.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "연간 구독",
-                style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
-                modifier = Modifier.weight(1f),
-            )
-            Column(horizontalAlignment = Alignment.End) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = "₩46,800",
-                    style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+                    text = "무료 플랜",
+                    style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
                 )
                 Text(
-                    text = "월 환산 ₩3,900",
-                    style = AppTypography.Caption2.copy(color = AppColors.TextSecondary),
+                    text = "기본 앱 제한·통계 기능을 무료로 이용 중이에요.",
+                    style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),
                 )
             }
         }
+        Text(
+            text = if (preLaunchCopy) {
+                "지금은 유료 구독 오픈 전이에요. 아래에서 프리미엄 요금·혜택만 미리 확인할 수 있어요."
+            } else {
+                "프리미엄 구독 시 제한 앱 수 무제한, 고급 통계 등 추가 기능을 이용할 수 있어요."
+            },
+            style = AppTypography.Caption2.copy(color = AppColors.TextSecondary),
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        AptoxPrimaryButton(
+            text = if (preLaunchCopy) "프리미엄 안내 보기" else "프리미엄 구독하기",
+            onClick = onOpenPremiumOffer,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
-        // 갱신 안내 텍스트
+/** 유료 구독 중 — [SubscriptionManager.PREMIUM_OFFERING_LIVE]가 true일 때만 노출 */
+@Composable
+private fun SubscriptionManageSubscribedPlanSection(
+    renewalOrExpiryLine: String,
+    basePlanId: String?,
+) {
+    val isMonthly = basePlanId == SubscriptionBillingController.BASE_PLAN_MONTHLY
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (isMonthly) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AppColors.SurfaceBackgroundCard)
+                    .padding(horizontal = 18.dp, vertical = 22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "월간 구독",
+                    style = AppTypography.HeadingH3.copy(color = AppColors.TextPrimary),
+                )
+                Text(
+                    text = "₩3,900",
+                    style = AppTypography.HeadingH1.copy(
+                        fontSize = 24.sp,
+                        lineHeight = 32.sp,
+                        color = AppColors.TextPrimary,
+                    ),
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AppColors.SurfaceBackgroundCard)
+                    .padding(horizontal = 18.dp, vertical = 22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "연간 구독",
+                    style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+                    modifier = Modifier.weight(1f),
+                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "₩46,800",
+                        style = AppTypography.BodyBold.copy(color = AppColors.TextPrimary),
+                    )
+                    Text(
+                        text = "월 환산 ₩3,900",
+                        style = AppTypography.Caption2.copy(color = AppColors.TextSecondary),
+                    )
+                }
+            }
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -495,7 +620,7 @@ fun SubscriptionManageScreen() {
         ) {
             IcoDisclaimerInfo(size = 14.dp, tint = AppColors.TextCaption)
             Text(
-                text = "2027년 2월 3일 오후 3시 21분에 갱신됩니다",
+                text = renewalOrExpiryLine,
                 style = AppTypography.Caption2.copy(color = AppColors.TextCaption),
             )
         }
