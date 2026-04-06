@@ -50,6 +50,9 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import com.aptox.app.StatisticsData
 import com.aptox.app.subscription.PremiumSnapshot
@@ -63,6 +66,29 @@ import java.util.Locale
 /**
  * 계정관리 구글 행 부제: Gmail/Googlemail 은 `@` 뒤 생략(로컬파트만), 그 외 도메인은 전체 이메일.
  */
+/** [642-4685] 권한 설정 — 배터리 최적화 예외 화면 열기 (온보딩·PermissionScreen과 동일 계열) */
+private fun Context.openBatteryOptimizationSettingsOrFallback() {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                },
+            )
+        } else {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    } catch (_: Exception) {
+        try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (_: Exception) { }
+        }
+    }
+}
+
 internal fun formatGoogleAccountRowEmail(email: String?): String {
     if (email.isNullOrBlank()) return ""
     val trimmed = email.trim()
@@ -782,12 +808,13 @@ fun PermissionSettingsScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val permissionState = remember { mutableStateOf(Pair(false, false)) }
+    val permissionState = remember { mutableStateOf(Triple(false, false, true)) }
 
     fun refreshPermissions() {
-        permissionState.value = Pair(
+        permissionState.value = Triple(
             isAccessibilityEnabled(context),
             StatisticsData.hasUsageAccess(context),
+            context.isIgnoringBatteryOptimizations(),
         )
     }
 
@@ -800,7 +827,7 @@ fun PermissionSettingsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val (accessibilityEnabled, usageStatsEnabled) = permissionState.value
+    val (accessibilityEnabled, usageStatsEnabled, batteryOptimizationExempt) = permissionState.value
 
     Column(
         modifier = Modifier
@@ -827,6 +854,15 @@ fun PermissionSettingsScreen(
                 badgeAllowed = usageStatsEnabled,
                 subtitle = "사용 시간 측정에 필요해요",
                 onClick = onUsageStatsClick,
+            )
+            SettingsDivider()
+            SettingsRowWithBadge(
+                iconResId = R.drawable.ic_perm_battery,
+                label = "백그라운드 배터리 사용 허용",
+                badgeText = if (batteryOptimizationExempt) "허용됨" else "허용되지 않음",
+                badgeAllowed = batteryOptimizationExempt,
+                subtitle = "백그라운드에서 앱 사용을 꾸준히 추적해요",
+                onClick = { context.openBatteryOptimizationSettingsOrFallback() },
             )
         }
         Spacer(modifier = Modifier.height(24.dp))

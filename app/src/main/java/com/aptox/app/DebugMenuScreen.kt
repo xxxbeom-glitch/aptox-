@@ -82,6 +82,7 @@ fun DebugFlowHost(
             DebugScreenPreview(
                 screen = selectedScreen!!,
                 onBack = { selectedScreen = null; addAppReturnTo = null },
+                onExitToMainApp = onStartNormalFlow,
                 onNavigateToScreen = { target ->
                     if (target == DebugScreen.AddAppFlowHost) {
                         addAppReturnTo = selectedScreen
@@ -115,6 +116,8 @@ sealed class DebugScreen(val category: String, val label: String) {
     // 인증/온보딩
     data object Splash : DebugScreen("인증/온보딩", "스플래시")
     data object Permission : DebugScreen("인증/온보딩", "기기 권한 안내")
+    /** Figma 1652-4712 앱 접근권한 안내 — UI 셸만 (중앙 비주얼 blank) */
+    data object PermissionUsageAccessOnboardingFigma1652 : DebugScreen("인증/온보딩", "앱 접근권한 안내 (Figma 1652)")
     data object SelfTestVer2 : DebugScreen("인증/온보딩", "스마트폰 사용패턴 테스트")
     data object SelfTestLoading : DebugScreen("인증/온보딩", "테스트 결과 로딩 애니메이션")
     data object UsagePatternAnalysis : DebugScreen("인증/온보딩", "진단 결과")
@@ -184,6 +187,8 @@ sealed class DebugScreen(val category: String, val label: String) {
 private fun DebugScreenPreview(
     screen: DebugScreen,
     onBack: () -> Unit,
+    /** Figma 1652 온보딩 X(권한 나중에) 등 — 메인 앱(홈)으로 나갈 때. null이면 해당 동작은 [onBack] */
+    onExitToMainApp: (() -> Unit)? = null,
     onNavigateToScreen: (DebugScreen) -> Unit = {},
     onAddAppComplete: () -> Unit = {},
     pendingPauseFlowFromOverlay: PendingPauseFlowFromOverlay? = null,
@@ -406,6 +411,10 @@ private fun DebugScreenPreview(
             onPrimaryClick = onBack,
             onGhostClick = onBack,
             enforceRequiredPermissionsForNext = false,
+        )
+        DebugScreen.PermissionUsageAccessOnboardingFigma1652 -> DebugPermissionUsageAccessOnboarding1652Screen(
+            onBack = onBack,
+            onCloseSkipPermissions = onExitToMainApp ?: onBack,
         )
         DebugScreen.AppIntroOnboarding -> AppIntroOnboardingScreen(
             onNextClick = onBack,
@@ -725,6 +734,7 @@ private fun DebugScreenListSection(
         listOf(
             DebugScreen.Splash,
             DebugScreen.Permission,
+            DebugScreen.PermissionUsageAccessOnboardingFigma1652,
             DebugScreen.AppIntroOnboarding,
             DebugScreen.SelfTestFullFlow,
             DebugScreen.SelfTestVer2,

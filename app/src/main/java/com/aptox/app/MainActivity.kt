@@ -36,24 +36,13 @@ import android.content.Context
 import kotlinx.coroutines.launch
 
 /**
- * 스플래시/권한 직후: 필수 권한 → (온보딩 1회) 앱 소개 → 이름+자가테스트(Ver2) → 분석 로딩(ST-09) → 사용패턴 결과 → 메인.
- * 권한 화면을 거친 경우에만 앱 소개가 끼고, 이미 권한이 있으면 스플래시 직후 Ver2로 진입.
- * [FirstRunFlowRepository] 완료 플래그는 사용패턴 분석 완료 시에만 true.
+ * 스플래시 직후: 미완료 시 Figma 기기 권한 온보딩(1652) → 메인.
+ * 기존 PermissionScreen·앱 소개·자가테스트·사용패턴 분석 체인은 비활성화됨.
+ * [FirstRunFlowRepository] Figma 권한 온보딩 완료 플래그는 전용 DataStore(백업 제외)에만 저장.
  */
 private suspend fun resolveStepAfterAuth(context: Context, firstRunRepo: FirstRunFlowRepository): SignUpStep {
-    if (!context.areRequiredAppPermissionsGranted()) return SignUpStep.PERMISSION
-    if (!firstRunRepo.isOnboardingFlowCompleted()) {
-        return SignUpStep.SELFTEST_VER2
-    }
-    return SignUpStep.MAIN
-}
-
-/** 권한 안내 화면 종료 후(허용 완료 또는 「다음에 하기」) 온보딩이면 앱 소개 화면으로 */
-private suspend fun resolveStepAfterPermissionScreen(context: Context, firstRunRepo: FirstRunFlowRepository): SignUpStep {
-    if (!firstRunRepo.isOnboardingFlowCompleted()) {
-        return SignUpStep.APP_INTRO_ONBOARDING
-    }
-    return SignUpStep.MAIN
+    if (firstRunRepo.isPermissionFigma1652OnboardingCompleted()) return SignUpStep.MAIN
+    return SignUpStep.PERMISSION_ONBOARDING_1652
 }
 
 @Composable
@@ -105,6 +94,8 @@ data class PendingPauseFlowFromOverlay(
 
 enum class SignUpStep {
     SPLASH,
+    /** Figma 1652 스타일 기기 권한 온보딩 — 스플래시 직후 1회 */
+    PERMISSION_ONBOARDING_1652,
     PERMISSION,
     /** App intro after device permission screen; next → SelfTest Ver2 */
     APP_INTRO_ONBOARDING,
@@ -298,6 +289,13 @@ fun SignUpFlowHost(
         step = SignUpStep.MAIN
     }
 
+    val completePermissionOnboarding: () -> Unit = {
+        scope.launch {
+            firstRunRepo.setPermissionFigma1652OnboardingCompleted(true)
+            step = SignUpStep.MAIN
+        }
+    }
+
     // 현재 화면 렌더링
     when (step) {
         SignUpStep.SPLASH -> SplashScreen(
@@ -307,23 +305,20 @@ fun SignUpFlowHost(
                 }
             },
         )
-        SignUpStep.PERMISSION -> PermissionScreen(
-            onPrimaryClick = {
-                scope.launch {
-                    if (!context.areRequiredAppPermissionsGranted()) return@launch
-                    step = resolveStepAfterPermissionScreen(context, firstRunRepo)
-                }
-            },
-            onGhostClick = {
-                scope.launch {
-                    step = resolveStepAfterPermissionScreen(context, firstRunRepo)
-                }
-            },
+        SignUpStep.PERMISSION_ONBOARDING_1652 -> DebugPermissionUsageAccessOnboarding1652Screen(
+            onBack = completePermissionOnboarding,
+            onCloseSkipPermissions = completePermissionOnboarding,
+            onStartAptox = completePermissionOnboarding,
         )
-        SignUpStep.APP_INTRO_ONBOARDING -> AppIntroOnboardingScreen(
-            onNextClick = { step = SignUpStep.SELFTEST_VER2 },
-            onBackClick = { step = SignUpStep.PERMISSION },
-        )
+        // 아래 온보딩·구 Permission 분기는 숨김 — 진입 시 즉시 MAIN (잘못된 step 방지)
+        SignUpStep.PERMISSION -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
+        SignUpStep.APP_INTRO_ONBOARDING -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
         SignUpStep.LOGIN -> Box(modifier = Modifier.fillMaxSize()) {
             SplashLoginScreen(
                 initialButtonsVisible = true,
@@ -380,59 +375,29 @@ fun SignUpFlowHost(
                 LaunchedEffect(Unit) { step = SignUpStep.LOGIN }
             }
         }
-        SignUpStep.SELFTEST -> SelfTestScreen(
-            onBackClick = { step = SignUpStep.MAIN },
-            onComplete = { answers ->
-                selfTestAnswers = answers
-                step = SignUpStep.SELFTEST_LOADING
-            },
-        )
-        SignUpStep.SELFTEST_VER2 -> SelfTestScreenVer2(
-            onBack = { step = SignUpStep.APP_INTRO_ONBOARDING },
-            onComplete = { name, answers ->
-                selfTestUserName = name
-                UserPreferencesRepository(context).userName = name
-                selfTestAnswers = answers
-                step = SignUpStep.SELFTEST_LOADING
-            },
-        )
-        SignUpStep.SELFTEST_LOADING -> SelfTestLoadingScreen(
-            onFinish = { step = SignUpStep.USAGE_PATTERN_ANALYSIS },
-            userName = selfTestUserName.ifBlank {
-                UserPreferencesRepository(context).userName ?: "아영"
-            },
-        )
-        SignUpStep.USAGE_PATTERN_ANALYSIS -> DiagnosisResultScreen(
-            userName = selfTestUserName.ifBlank {
-                UserPreferencesRepository(context).userName ?: "아영"
-            },
-            diagnosisScore = computeDiagnosisScore(selfTestAnswers),
-            onFinish = { step = SignUpStep.ONBOARDING_START },
-        )
-        SignUpStep.ONBOARDING_START -> OnboardingStartScreen(
-            onFinish = {
-                scope.launch {
-                    firstRunRepo.setOnboardingFlowCompleted(true)
-                    step = SignUpStep.MAIN
-                }
-            },
-        )
+        SignUpStep.SELFTEST -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
+        SignUpStep.SELFTEST_VER2 -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
+        SignUpStep.SELFTEST_LOADING -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
+        SignUpStep.USAGE_PATTERN_ANALYSIS -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
+        SignUpStep.ONBOARDING_START -> {
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
+        }
         SignUpStep.SELFTEST_RESULT -> {
-            val answerCount = if (selfTestAnswers.size == 8) 8 else 7
-            val sum = selfTestAnswers.values.sumOf { (4 - it).coerceIn(0, 4) }
-            val raw = sum.coerceIn(answerCount, answerCount * 4)
-            SelfTestResultScreenST10(
-                resultType = computeSelfTestResultType(selfTestAnswers),
-                onStartClick = {
-                    scope.launch {
-                        firstRunRepo.setOnboardingFlowCompleted(true)
-                        step = SignUpStep.MAIN
-                    }
-                },
-                onBackClick = { step = SignUpStep.SELFTEST },
-                rawScore = raw,
-                answerCount = answerCount,
-            )
+            LaunchedEffect(Unit) { step = SignUpStep.MAIN }
+            Box(modifier = Modifier.fillMaxSize())
         }
         SignUpStep.ADD_APP -> AddAppFlowHost(
             onComplete = {

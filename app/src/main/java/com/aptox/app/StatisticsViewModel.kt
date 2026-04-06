@@ -79,6 +79,17 @@ class StatisticsViewModel(
         categoryStatsEndMs = end
     }
 
+    /**
+     * 디버그 통계 카드 등 임의 구간용. [onAppItemClick] 상세 시트 조회 범위를 (startMs, endMs)로 맞출 때 사용.
+     * 프로덕션 카테고리 카드는 [syncCategoryStatsPeriod]만 사용.
+     */
+    fun syncCategoryStatsPeriodForRange(startMs: Long, endMs: Long) {
+        if (endMs > startMs) {
+            categoryStatsStartMs = startMs
+            categoryStatsEndMs = endMs
+        }
+    }
+
     fun onAppItemClick(packageName: String) {
         val startMs = categoryStatsStartMs
         val endMs = categoryStatsEndMs

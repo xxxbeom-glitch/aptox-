@@ -36,11 +36,12 @@
 
 ### 전체 구조
 
-- **진입점**: `MainActivity` → `SignUpFlowHost` 또는 (dev+DEBUG) `DebugFlowHost` → `AptoxRootContent`. `MainActivity.onResume`에서 `AptoxApplication.startAppMonitorIfNeeded`(알림 탭으로 바텀시트 열 때 등 `clearForegroundPkg` 전달)
+- **진입점**: `MainActivity` → `SignUpFlowHost` 또는 (dev+DEBUG) `DebugFlowHost` → `AptoxRootContent`. `MainActivity.onStart`·`onResume`에서 `AptoxApplication.startAppMonitorIfNeeded`(알림 탭으로 바텀시트 열 때 등 `clearForegroundPkg` 전달)
 - **온보딩/로그인**: `SignUpStep` enum으로 화면 전환 (`MainActivity.kt`)
 - **메인 앱**: `MainFlowHost` — 하단 탭(홈/챌린지/통계/설정) + 설정 서브화면(`SettingsDetail` sealed class, `StubScreens.kt`)
 - **백그라운드**: `AppMonitorService`(포그라운드 사용량 모니터링 — **일일 제한 앱이 0개여도 FGS·기본 알림 유지**, 차단 루프만 map 비었을 때 생략), `AptoxAccessibilityService`, 각종 `BroadcastReceiver`, WorkManager(`UsageStatsSyncWorker` 등)
-- **앱 시작/부팅**: `AptoxApplication.startAppMonitorIfNeeded`·`BootCompletedReceiver`는 restriction map이 **비어 있어도** `AppMonitorService.start` 호출(상시 감지 채널)
+- **앱 시작/부팅**: `AptoxApplication.startAppMonitorIfNeeded`·`BootCompletedReceiver`는 restriction map이 **비어 있어도** `AppMonitorService.start` 호출을 시도. 실제 FGS 시작은 `AppMonitorService.start` 내부에서 Kotlin 확장 **`areRequiredAppPermissionsGranted()`**(`PermissionScreen.kt` — 사용정보 접근 + 접근성 서비스)일 때만 진행. Android 12+ 백그라운드 FGS 제한 시 `IllegalStateException` 로그 후 앱 포그라운드 복귀 시 재시도. 알림 채널 ID **`app_monitor_v2`**, 중요도 **`IMPORTANCE_DEFAULT`**(구 `LOW` 채널은 상단바 미표시 기기 다수). `queryEvents`는 `SecurityException` 시 `lastCheckedTime` 유지 후 스킵. 매니페스트에 **`POST_NOTIFICATIONS`** 선언(API 33+ 런타임 요청과 별개)
+- **권한 화면 연동**: `PermissionScreen`에서 필수 권한 충족 시 `LaunchedEffect`로 `startAppMonitorIfNeeded` 호출(설정 복귀 직후 재기동 보강)
 - **오버레이/차단 UI**: `BlockDialogActivity`(투명 테마)
 
 ### 주요 클래스·파일 역할 (요약)
@@ -81,7 +82,7 @@
 | Composable | 역할 | 진입 | 로그인 | 프리미엄 |
 |------------|------|------|--------|----------|
 | `SplashScreen` | 초기 스플래시 후 다음 단계 결정. `loadInstalledApps()`는 `async(IO)`로 **가짜 진행(20×30ms)과 병행** 후 `await` → `classifyAndCacheAppsPartial`(캐시 미스만 `classifyApps`) | 앱 시작 | - | - |
-| `PermissionScreen` | 필수 권한 안내 | 스플래시 후 미허용 시 | - | - |
+| `PermissionScreen` | 필수: 앱 사용정보·접근성(`areRequiredAppPermissionsGranted`). Android 13+ **권장**: `POST_NOTIFICATIONS` — `rememberLauncherForActivityResult(RequestPermission)`로 「알림 허용하기」, 재거절·다시 묻지 않음 시 `ACTION_APP_NOTIFICATION_SETTINGS`. API 33 미만은 별도 런타임 알림 권한 없음(안내 카드만) | 스플래시 후 미허용 시 | - | - |
 | `AppIntroOnboardingScreen` | 앱 소개(온보딩 1회 흐름) | 권한 화면 후, 온보딩 미완료 | - | - |
 | `SplashLoginScreen` | 구글 로그인(스플래시 스타일) | `SignUpStep.LOGIN` | - | - |
 | `SelfTestScreenVer2` | 이름 입력 + 자가테스트 Ver2 | 온보딩 | - | - |
@@ -145,7 +146,7 @@
 | Firestore 일별 동기화 | 로그인 사용자 `dailyUsage` 등 | `DailyUsageFirestoreRepository.kt`, `UsageStatsSyncWorker.kt` |
 | 통계 백업/복원 | `categoryStats`, `timeSegments` | `StatisticsBackupFirestoreRepository.kt` |
 | 앱 사용 제한 | 일일 한도, 시간 지정 등, 오버레이 | `AppMonitorService`, `BlockDialogActivity`, `AppRestrictionRepository`, `AddAppScreens.kt`, `AddAppTimeSpecifiedScreens.kt` |
-| 포그라운드 모니터링 상시 | 제한 map 비어도 `startForeground` 기본 알림(「앱 사용 시간을 기록하고 있어요」 등), 부팅·`Application`에서 재기동. **일일 한도 카운트 진행 중** FGS 노티는 `ongoing`+`setAutoCancel(false)`+「카운트 중지」액션(일시정지 아이콘) | `AppMonitorService.java`, `AptoxApplication.kt`, `BootCompletedReceiver.kt` |
+| 포그라운드 모니터링 상시 | 제한 map 비어도 `startForeground` 기본 알림(「앱 사용 시간을 기록하고 있어요」 등, 기본 빌더에 `ongoing`/`autoCancel false`). **시작 조건**: 사용정보+접근성 허용 시에만 `AppMonitorService.start`가 FGS 시작(정의: `PermissionScreen.kt` `areRequiredAppPermissionsGranted`). 부팅·`Application`·`MainActivity`·`PermissionScreen`에서 재기동 유도. 채널 **`app_monitor_v2`** / `IMPORTANCE_DEFAULT`. Android 13+ **알림 런타임 권한** 없으면 FGS·기타 알림 미표시가 정상 → `PermissionScreen`에서 요청, `MainActivity.onCreate`는 **이미 필수 권한을 갖춘 경우에만** `POST_NOTIFICATIONS` 자동 요청(온보딩 권한 화면과 중복 프롬프트 완화). **일일 한도 카운트 진행 중** FGS 노티는 `ongoing`+`setAutoCancel(false)`+「카운트 중지」액션 | `AppMonitorService.java`, `PermissionScreen.kt`, `AptoxApplication.kt`, `BootCompletedReceiver.kt`, `MainActivity.kt` |
 | 수동 타이머·카운트 미중지 알림 | 세션 앱이 백그라운드로 인식된 뒤 **약 1분** 후 알림(토글 `NotificationPreferences.isCountReminderEnabled`, 기본 true). 본문/「카운트 중지」액션 → `MainActivity`+바텀시트. `ongoing`+비자동취소. restriction map이 **비어 있어도** `checkForegroundEvents`에서 Usage 이벤트 처리(스케줄 가능). Android 13+ `POST_NOTIFICATIONS` 미허용 시 발송 생략(로그) | `CountReminderAlarmScheduler.kt`, `CountReminderAlarmReceiver.kt`, `CountReminderNotificationHelper.kt`, `AppMonitorService.java` |
 | 접근성 연동 | 제한 감지/조작 | `AptoxAccessibilityService` |
 | 일시정지 제안 플로우 | 오버레이에서 일시정지 → 앱 내 바텀시트 | `AppLimitPauseBottomSheet.kt`, `MainActivity` pending pause 인텐트 |
@@ -265,4 +266,4 @@
 
 *문서 생성 시점: 저장소 스냅샷 기준. 버전·플로우는 `app/build.gradle.kts`, `MainActivity.kt`, `StubScreens.kt`를 우선 참고.*
 
-*최종 보강: AppMonitor 상시 FGS·부팅 연동, 스플래시 병렬 로드·짧은 가짜 진행, AI 분류 디버그·캐시 `clearAll`·`debugSimulateFailure`, 카운트 미중지 알림·빈 restriction map에서의 Usage 처리, Gradle `uninstallAptoxForDevInstall`·AAB 경로 안내 (2026-04).*
+*최종 보강: AppMonitor 상시 FGS·부팅 연동, 필수 권한 게이트·`app_monitor_v2` 채널·`queryEvents` 예외 처리·FGS 백그라운드 제한 대응, `MainActivity.onStart`·`PermissionScreen`에서 모니터 재기동, Android 13+ `POST_NOTIFICATIONS` 권한 화면(Activity Result)+조건부 `MainActivity` 요청, 스플래시 병렬 로드·짧은 가짜 진행, AI 분류 디버그·캐시 `clearAll`·`debugSimulateFailure`, 카운트 미중지 알림·빈 restriction map에서의 Usage 처리, Gradle `uninstallAptoxForDevInstall`·AAB 경로 안내 (2026-04).*

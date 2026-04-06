@@ -6,8 +6,7 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- 재설치 후 클라우드 복원 시 온보딩이 스킵되지 않도록 first-run·권한 온보딩 DataStore 제외 -->
+    <exclude domain="file" path="datastore/aptox_first_run.preferences_pb" />
+    <exclude domain="file" path="datastore/aptox_permission_onboarding.preferences_pb" />
 </full-backup-content>

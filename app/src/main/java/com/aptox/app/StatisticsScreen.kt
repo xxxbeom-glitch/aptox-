@@ -296,6 +296,11 @@ fun StatisticsScreen(
                     onYearChange = { yearOffsetComparison = it },
                     onInfoClick = { showHelpSheet = StatsHelpType.TIME_SLOT },
                 )
+                if (BuildConfig.DEBUG) {
+                    StatisticsDebugUsagePatternCard()
+                    StatisticsDebugTotalUsageTimeCard()
+                    StatisticsDebugCategoryStatsCard(statisticsViewModel = statisticsViewModel)
+                }
                 // 맨 아래 스크롤 시 바텀바로부터 32dp 여백 (padding bottom으로 적용)
             }
     }
