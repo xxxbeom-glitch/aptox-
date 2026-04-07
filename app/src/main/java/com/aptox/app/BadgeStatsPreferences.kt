@@ -2,6 +2,7 @@ package com.aptox.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 
 /**
  * 배지 자동 지급용 로컬 카운터·연속일·중복 방지 플래그.
@@ -149,5 +150,76 @@ object BadgeStatsPreferences {
 
     fun resetAll(ctx: Context) {
         prefs(ctx).edit().clear().apply()
+    }
+
+    private const val BACKUP_PENDING_KEY = "pending_badges"
+
+    /** pending_badges 제외, 로컬 백업용 */
+    fun exportEntriesForBackup(ctx: Context): List<Pair<String, String>> {
+        val p = prefs(ctx)
+        return p.all.entries
+            .filter { it.key != BACKUP_PENDING_KEY }
+            .map { it.key to encodePrefValueForBackup(it.value) }
+    }
+
+    private fun encodePrefValueForBackup(v: Any?): String = when (v) {
+        is Boolean -> "boolean:$v"
+        is Int -> "int:$v"
+        is Long -> "long:$v"
+        is Float -> "float:$v"
+        is String ->
+            "string:" + Base64.encodeToString(v.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        null -> "string:"
+        else -> "string:" + Base64.encodeToString(v.toString().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+    }
+
+    /**
+     * 뱃지 통계 키만 교체(pending_badges 유지).
+     * @return 적용된 항목이 하나라도 있으면 true
+     */
+    fun restoreEntriesFromBackup(ctx: Context, entries: List<Pair<String, String>>): Boolean {
+        val p = prefs(ctx)
+        val ed = p.edit()
+        for (key in p.all.keys) {
+            if (key != BACKUP_PENDING_KEY) ed.remove(key)
+        }
+        var any = false
+        for ((key, enc) in entries) {
+            if (key == BACKUP_PENDING_KEY) continue
+            when {
+                enc.startsWith("boolean:") -> {
+                    val rest = enc.removePrefix("boolean:").trim().lowercase()
+                    when (rest) {
+                        "true", "1" -> ed.putBoolean(key, true)
+                        "false", "0" -> ed.putBoolean(key, false)
+                        else -> continue
+                    }
+                    any = true
+                }
+                enc.startsWith("int:") -> {
+                    val n = enc.removePrefix("int:").toIntOrNull() ?: continue
+                    ed.putInt(key, n)
+                    any = true
+                }
+                enc.startsWith("long:") -> {
+                    val n = enc.removePrefix("long:").toLongOrNull() ?: continue
+                    ed.putLong(key, n)
+                    any = true
+                }
+                enc.startsWith("float:") -> {
+                    val n = enc.removePrefix("float:").toFloatOrNull() ?: continue
+                    ed.putFloat(key, n)
+                    any = true
+                }
+                enc.startsWith("string:") -> {
+                    val b64 = enc.removePrefix("string:")
+                    val s = if (b64.isEmpty()) "" else String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8)
+                    ed.putString(key, s)
+                    any = true
+                }
+            }
+        }
+        if (any) ed.commit()
+        return any
     }
 }

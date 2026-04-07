@@ -53,12 +53,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
+import com.aptox.app.subscription.SubscriptionFeature
+import com.aptox.app.subscription.SubscriptionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -313,70 +313,19 @@ fun AddAppSelectBottomSheet(
         AppRestrictionRepository(context).getAll().map { it.packageName }.toSet() + additionalRestrictedPackages
     }
 
-    val selfPackageName = context.packageName
     val cacheRepo = remember { AppCategoryCacheRepository(context) }
     LaunchedEffect(Unit) {
-        val items = withContext(Dispatchers.Default) {
-            runCatching {
-                val pm = context.packageManager
-                val endTime = System.currentTimeMillis()
-                val start7d = endTime - 7L * 24 * 60 * 60 * 1000L
-                val start30d = endTime - 30L * 24 * 60 * 60 * 1000L
-                val usageStatsManager =
-                    context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-
-                fun usageForegroundMs(startMs: Long, endMs: Long): Map<String, Long> =
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        usageStatsManager
-                            .queryAndAggregateUsageStats(startMs, endMs)
-                            .mapValues { (_, u) -> u.totalTimeInForeground }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        val stats = usageStatsManager.queryUsageStats(
-                            UsageStatsManager.INTERVAL_BEST,
-                            startMs,
-                            endMs,
-                        ) ?: emptyList()
-                        stats
-                            .groupBy { it.packageName }
-                            .mapValues { (_, list) -> list.sumOf { it.totalTimeInForeground } }
-                    }
-
-                val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                val resolves = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    pm.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
-                } else {
-                    @Suppress("DEPRECATION")
-                    pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
-                }
-                val launcherPackages = resolves
-                    .mapNotNull { runCatching { it.activityInfo.packageName }.getOrNull() }
-                    .filter { it != selfPackageName }
-                    .toSet()
-
-                val usage30d = usageForegroundMs(start30d, endTime)
-                val min30dForegroundMs = 60_000L
-                val eligiblePackages = launcherPackages.filter { pkg ->
-                    (usage30d[pkg] ?: 0L) >= min30dForegroundMs
-                }
-
-                val usage7d = usageForegroundMs(start7d, endTime)
-                eligiblePackages
-                    .mapNotNull { pkg ->
-                        runCatching {
-                            val appInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                pm.getApplicationInfo(pkg, PackageManager.ApplicationInfoFlags.of(0L))
-                            } else {
-                                @Suppress("DEPRECATION")
-                                pm.getApplicationInfo(pkg, 0)
-                            }
-                            val label = (pm.getApplicationLabel(appInfo) as? String)?.takeIf { it.isNotBlank() }
-                            AppSelectItem(name = label ?: pkg, packageName = pkg)
-                        }.getOrNull()
-                    }
-                    .distinctBy { it.packageName }
-                    .sortedByDescending { item -> usage7d[item.packageName] ?: 0L }
-            }.getOrElse { emptyList() }
+        val cached = AppSelectableAppsCache.getIfWarmed()
+        val items = if (cached != null) {
+            cached.map { AppSelectItem(name = it.name, packageName = it.packageName) }
+        } else {
+            val loaded = withContext(Dispatchers.Default) {
+                runCatching { AppSelectableAppsLoader.load(context) }.getOrElse { emptyList() }
+            }
+            if (StatisticsData.hasUsageAccess(context.applicationContext)) {
+                AppSelectableAppsCache.set(loaded)
+            }
+            loaded.map { AppSelectItem(name = it.name, packageName = it.packageName) }
         }
         appList = items
         isLoadingApps = false
@@ -827,13 +776,10 @@ fun AddAppSummaryRow(
 // 스크린샷: 헤더 "일일 사용량 제한", 4개 SelectionRow, "다음" 버튼
 // ─────────────────────────────────────────────
 
-// 3분 맨 앞, 나머지는 시간 큰 순서 (180→30).
-// BuildConfig.EXCLUDE_3MIN_OPTION: externalTest 플레이버에서 3분 제외.
-// DebugTestSettings.debugShow3MinDailyOption: dev 플레이버에서 디버그 메뉴로 런타임 토글.
-private fun getDailyTimeSteps(): List<String> = when {
-    BuildConfig.EXCLUDE_3MIN_OPTION -> listOf("180분", "150분", "120분", "90분", "60분", "30분")
-    DebugTestSettings.debugShow3MinDailyOption -> listOf("3분", "180분", "150분", "120분", "90분", "60분", "30분")
-    else -> listOf("180분", "150분", "120분", "90분", "60분", "30분")
+// 무료/유료 공통 노출 순서 (짧은 시간→긴 시간→제한 없음). 디버그 시 3분만 맨 앞 옵션.
+private fun getDailyTimeSteps(): List<String> {
+    val base = listOf("30분", "60분", "90분", "120분", "150분", "180분", "제한 없음")
+    return if (DebugTestSettings.debugShow3MinDailyOption) listOf("3분") + base else base
 }
 
 /** 드럼롤 바텀시트: 이미 고른 값이 있으면 그 인덱스, 없으면 기본 60분 */
@@ -1287,6 +1233,8 @@ fun AddAppFlowHost(
     modifier: Modifier = Modifier,
     /** 홈 빈 상태 카드에서 앱 행의 「제한 앱 추가」 버튼으로 진입 시 pre-fill 앱 정보 */
     initialPrefilledApp: com.aptox.app.model.SelectedAppInfo? = null,
+    /** 무료 사용자가 잠긴 일일 한도 확인 탭 시 구독 바텀시트 */
+    onRequestPremiumSubscription: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -1389,9 +1337,24 @@ fun AddAppFlowHost(
             }
             if (showDailyTimeSheet) {
                 val dailySteps = getDailyTimeSteps()
+                val subscribed = SubscriptionManager.isSubscribed(context)
+                val lockedDailyIndices = if (subscribed) {
+                    emptySet()
+                } else {
+                    dailySteps.indices.filter { i ->
+                        SubscriptionFeature.isDailyLimitDrumrollOptionLockedForFreeUser(dailySteps[i])
+                    }.toSet()
+                }
+                val rawDailyInitial = dailyDrumrollInitialIndex(dailySteps, dailyLimitMinutes)
+                val dailyInitialIndex =
+                    if (lockedDailyIndices.isNotEmpty() && rawDailyInitial in lockedDailyIndices) {
+                        (lockedDailyIndices.minOrNull()!! - 1).coerceAtLeast(0)
+                    } else {
+                        rawDailyInitial.coerceIn(0, dailySteps.lastIndex)
+                    }
                 DrumrollDurationPickerBottomSheet(
                     items = dailySteps,
-                    initialIndex = dailyDrumrollInitialIndex(dailySteps, dailyLimitMinutes),
+                    initialIndex = dailyInitialIndex,
                     title = "하루 사용량을 지정해주세요",
                     subtitle = "사용 시간을 너무 짧게 시작하면 역효과가 생겨요",
                     confirmButtonText = "다음",
@@ -1400,6 +1363,8 @@ fun AddAppFlowHost(
                         dailyLimitMinutes = mins
                         showDailyTimeSheet = false
                     },
+                    lockedItemIndices = lockedDailyIndices,
+                    onLockedSelectionAttempt = onRequestPremiumSubscription,
                 )
             }
         }
@@ -1538,7 +1503,7 @@ private suspend fun persistDailyLimitAddFlow(
     dailyLimitMinutes: String?,
 ) {
     val repo = AppRestrictionRepository(context)
-    val mins = parseLimitMinutes(dailyLimitMinutes ?: "30분")
+    val mins = parseDailyLimitMinutesForStorage(dailyLimitMinutes ?: "30분")
     val baselineTime = System.currentTimeMillis()
     selectedAppsForDaily.filter { it.packageName.isNotBlank() }.forEach { app ->
         repo.save(
@@ -1590,5 +1555,11 @@ private suspend fun persistAddAppTimeLimitSummaryFlow(
 }
 
 private fun parseLimitMinutes(limitStr: String): Int {
+    return limitStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 60
+}
+
+/** 일일 사용량 드럼롤 선택값 → 저장용 분(또는 무제한 sentinel) */
+private fun parseDailyLimitMinutesForStorage(limitStr: String): Int {
+    if (limitStr.contains("제한 없음")) return DailyUsageLimitConstants.UNLIMITED_MINUTES_SENTINEL
     return limitStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 60
 }

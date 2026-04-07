@@ -17,7 +17,7 @@ android {
         applicationId = "com.aptox.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 29
+        versionCode = 32
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -29,6 +29,11 @@ android {
             dimension = "distribution"
             buildConfigField("boolean", "SHOW_DEBUG_MENU", "true")
             buildConfigField("boolean", "EXCLUDE_3MIN_OPTION", "false")
+            buildConfigField(
+                "String",
+                "ADMOB_BANNER_AD_UNIT_ID",
+                "\"ca-app-pub-3940256099942544/6300978111\"",
+            )
             resValue("string", "app_name", "Aptox Dev")
         }
         create("externalTest") {
@@ -36,6 +41,11 @@ android {
             applicationId = "com.aptox.app"
             buildConfigField("boolean", "SHOW_DEBUG_MENU", "false")
             buildConfigField("boolean", "EXCLUDE_3MIN_OPTION", "true")
+            buildConfigField(
+                "String",
+                "ADMOB_BANNER_AD_UNIT_ID",
+                "\"ca-app-pub-2691016483768478/4868696837\"",
+            )
         }
     }
 
@@ -94,6 +104,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.fragment.ktx)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -107,6 +118,9 @@ dependencies {
 
     // Google Play Billing (구독)
     implementation("com.android.billingclient:billing-ktx:7.1.1")
+
+    // AdMob
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
 
     // WorkManager + Room/Startup (명시 버전으로 전이 의존성 정렬 — WorkDatabase 초기화 안정화)
     // work-runtime-ktx 2.10.2는 Room 2.6.x와 함께 빌드됨. Room 2.6.1과 동일 계열로 유지할 것.

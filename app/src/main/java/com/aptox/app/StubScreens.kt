@@ -29,12 +29,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,9 +70,15 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.aptox.app.BuildConfig
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.os.Build
 import com.aptox.app.subscription.PremiumStatusRepository
 import com.aptox.app.subscription.SubscriptionBillingController
+import com.aptox.app.subscription.SubscriptionFeature
 import com.aptox.app.subscription.SubscriptionManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -81,6 +89,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
+import com.aptox.app.ads.AptoxBannerAd
+import com.aptox.app.backup.BackupSizeFormatter
+import com.aptox.app.backup.BackupTargetStorageEstimator
+import com.aptox.app.backup.BackupUiFormatter
+import com.aptox.app.backup.DataBackupMetadataRepository
+import com.aptox.app.backup.LocalBackupExporter
+import com.aptox.app.widget.AptoxRestrictionStatusWidgetProvider
+import com.aptox.app.backup.LocalBackupImporter
+import com.aptox.app.usage.UsageStatsFirestoreSync
+import com.aptox.app.StatisticsData
 import com.aptox.app.ui.components.AptoxToast
 import com.aptox.app.ui.components.LocalBottomBarHeight
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -189,8 +207,14 @@ fun SplashScreen(onFinish: () -> Unit) {
 
     LaunchedEffect(Unit) {
         val preload = AppDataPreloadRepository(context)
+        val appCtx = context.applicationContext
         val loadDeferred = async(Dispatchers.IO) {
             runCatching { preload.loadInstalledApps() }.getOrElse { emptyList() }
+        }
+        // 제한 앱 선택용 목록: 사용 통계 허용 시 스플래시 구간과 병렬로 미리 로드 → 바텀시트 캐시
+        val pickerDeferred = async(Dispatchers.Default) {
+            if (!StatisticsData.hasUsageAccess(appCtx)) null
+            else runCatching { AppSelectableAppsLoader.load(appCtx) }.getOrElse { emptyList() }
         }
         // 0 → 30%: 가짜 진행(총 ~600ms), loadInstalledApps와 병행
         for (i in 1..20) {
@@ -217,6 +241,10 @@ fun SplashScreen(onFinish: () -> Unit) {
         }
 
         progress = 1f
+        when (val pickerList = pickerDeferred.await()) {
+            null -> { }
+            else -> AppSelectableAppsCache.set(pickerList)
+        }
         delay(150)
         onFinish()
     }
@@ -596,6 +624,7 @@ private fun MainHomeDataEmptyCard(
     greetingTitle: String,
     greetingSubtext: String,
     top3Apps: List<StatisticsData.StatsAppItem>,
+    top3IsLoading: Boolean,
     onAddAppClick: (com.aptox.app.model.SelectedAppInfo?) -> Unit,
     onTimeSpecifiedClick: (com.aptox.app.model.SelectedAppInfo?) -> Unit = {},
     onStatisticsClick: () -> Unit,
@@ -633,6 +662,7 @@ private fun MainHomeDataEmptyCard(
                     showRestrictionTypeSheet = true
                 }
             },
+            isLoading = top3IsLoading,
         )
         MainAppRestrictionCard(
             apps = emptyList(),
@@ -1170,6 +1200,14 @@ internal fun MainScreenMA01(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // 부팅 시 권한 없어 initial_sync 가 스킵된 경우 + 설정에서 권한 허용 후 복귀
+    LaunchedEffect(hasAllRequiredPermissions, permissionRefreshKey) {
+        if (hasAllRequiredPermissions) {
+            UsageStatsInitialSync.flushPendingInitialSyncIfNeeded(context)
+            UsageStatsInitialSync.enqueueInitial7DayIfPermitted(context)
+        }
+    }
+
     // 제한 앱 목록 + 빈 상태일 때 top3Apps 함께 로드 (플래시 방지)
     val state by produceState<HomeRestrictionState?>(
         initialValue = null,
@@ -1194,6 +1232,20 @@ internal fun MainScreenMA01(
     val restrictionItems = state?.items ?: emptyList()
     val top3Apps = state?.top3Apps ?: emptyList()
     val isRestrictionStateReady = state != null
+
+    // 일주일 Top3: 첫 produceState 이전 + DB 백필 대기 구간은 로딩 표시
+    var top3UiSettled by remember { mutableStateOf(false) }
+    val awaitingTop3Fill = isRestrictionStateReady && top3Apps.isEmpty()
+    LaunchedEffect(top3Apps) {
+        if (top3Apps.isNotEmpty()) top3UiSettled = true
+    }
+    LaunchedEffect(awaitingTop3Fill) {
+        if (awaitingTop3Fill) {
+            delay(2_500)
+            top3UiSettled = true
+        }
+    }
+    val top3CardLoading = state == null || (awaitingTop3Fill && !top3UiSettled)
 
     // 오늘 스마트폰 사용시간 (실시간, 매일 자정 리셋)
     val todayUsageMs by produceState(initialValue = 0L, context) {
@@ -1226,6 +1278,7 @@ internal fun MainScreenMA01(
                 greetingTitle = greeting.title,
                 greetingSubtext = greeting.subtext,
                 top3Apps = top3Apps,
+                top3IsLoading = top3CardLoading,
                 onAddAppClick = { app -> onAddAppClick(app) },
                 onTimeSpecifiedClick = { app -> onTimeSpecifiedClick(app) },
                 onStatisticsClick = onStatisticsClick,
@@ -1258,6 +1311,7 @@ internal fun MainScreenMA01(
                         showRestrictionTypeSheet = true
                     }
                 },
+                isLoading = top3CardLoading,
             )
             MainAppRestrictionCard(
                 apps = restrictionItems,
@@ -1489,7 +1543,10 @@ internal fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem
             // UsageStatsUtils 대신 ManualTimerRepository 사용 시 카운트 중지 후 카드 시간이 정지함.
             val timerRepo = ManualTimerRepository(context)
             val usageMs = timerRepo.getTodayUsageMs(restriction.packageName)
-            val limitMs = restriction.limitMinutes * 60L * 1000L
+            val isDailyUnlimited =
+                restriction.limitMinutes >= DailyUsageLimitConstants.UNLIMITED_MINUTES_SENTINEL
+            val limitMs =
+                if (isDailyUnlimited) Long.MAX_VALUE / 4 else restriction.limitMinutes * 60L * 1000L
             val remainingMs = (limitMs - usageMs).coerceAtLeast(0)
             val todayMinutes = (usageMs / 60_000).toInt().coerceAtLeast(0)
             val todaySessionCount = (usm?.let { getTodaySessionCount(it, restriction.packageName) } ?: 0).toInt().coerceAtLeast(0)
@@ -1501,6 +1558,10 @@ internal fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem
             val daysUntil = if (!isEveryDay && repeatDaySet.isNotEmpty()) daysUntilNextRestriction(todayIdx, repeatDaySet) else 0
             val (usageText, usageLabel) = when {
                 daysUntil > 0 -> "${daysUntil}일 후 제한 예정" to "예정"
+                isDailyUnlimited -> when {
+                    isCountActive -> formatDurationHhMmSs(usageMs) to "사용"
+                    else -> "제한 없음" to ""
+                }
                 remainingMs <= 0 -> "사용 가능한 시간 없음" to ""
                 isCountActive -> formatDurationHhMmSs(remainingMs) to "남음"  // remainingMs = 한도에서 0으로 (카운트다운)
                 isEveryDay -> formatDurationHhMmSs(remainingMs) to "남음"
@@ -1517,8 +1578,12 @@ internal fun loadRestrictionItems(context: Context): List<MainAppRestrictionItem
                 restrictionType = RestrictionType.DAILY_USAGE,
                 usageMinutes = "${todayMinutes}분",
                 sessionCount = "${todaySessionCount}회",
-                dailyLimitMinutes = "${limitMinutes}분",
-                usageTextColor = if (remainingMs <= 0) AppColors.Red300 else AppColors.TextHighlight,
+                dailyLimitMinutes = if (isDailyUnlimited) "제한 없음" else "${limitMinutes}분",
+                usageTextColor = when {
+                    isDailyUnlimited -> AppColors.TextHighlight
+                    remainingMs <= 0 -> AppColors.Red300
+                    else -> AppColors.TextHighlight
+                },
                 usageLabelColor = AppColors.TextSecondary,
             )
         }
@@ -1589,15 +1654,14 @@ fun MainFlowHost(
     val context = LocalContext.current
     val premiumFromStore by PremiumStatusRepository.subscribedFlow(context.applicationContext)
         .collectAsState(initial = false)
-    val isFreeUser = !SubscriptionManager.isSubscribedWithStore(premiumFromStore, context.applicationContext)
-    /** Play·DataStore에 활성 구독이 없을 때만 하단 유도 배너 (프리미엄 오픈 전에도 스토어 구독이면 숨김) */
     val showPremiumUpsellBanner =
-        !premiumFromStore && !(BuildConfig.DEBUG && SubscriptionManager.debugForceSubscribed)
+        SubscriptionFeature.shouldShowPremiumUpsellNavBanner(context.applicationContext)
     val authRepository = remember { AuthRepository() }
     val firebaseAnalytics = remember {
         FirebaseAnalytics.getInstance(context.applicationContext)
     }
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     var accountRefreshKey by remember { mutableIntStateOf(0) }
     val currentUserInfo by produceState<AuthRepository.CurrentUserInfo?>(initialValue = null, accountRefreshKey) {
         value = authRepository.getCurrentUserInfo()
@@ -1613,6 +1677,17 @@ fun MainFlowHost(
         auth.addAuthStateListener(listener)
         onDispose { auth.removeAuthStateListener(listener) }
     }
+    // 스플래시를 건너뛴 진입(goToMain)·최초 사용통계 허용 직후 등 캐시 미워밍 시 백그라운드 로드
+    LaunchedEffect(Unit) {
+        val app = context.applicationContext
+        if (!StatisticsData.hasUsageAccess(app)) return@LaunchedEffect
+        if (AppSelectableAppsCache.isWarmed()) return@LaunchedEffect
+        (app as? AptoxApplication)?.applicationScope?.launch(Dispatchers.Default) {
+            runCatching {
+                AppSelectableAppsCache.set(AppSelectableAppsLoader.load(app))
+            }
+        }
+    }
     val isLoggedIn = firebaseAuthUid != null
     var settingsDetail by remember { mutableStateOf<SettingsDetail?>(null) }
     var toastMessage by remember { mutableStateOf<String?>(null) }
@@ -1626,6 +1701,12 @@ fun MainFlowHost(
     }
     var showTermsSheet by remember { mutableStateOf(false) }
     var showPrivacySheet by remember { mutableStateOf(false) }
+    var showDataBackupSheet by remember { mutableStateOf(false) }
+    var showRestoreBackupConfirm by remember { mutableStateOf(false) }
+    var isBackupRestoring by remember { mutableStateOf(false) }
+    var backupCardTotalSizeText by remember { mutableStateOf("—") }
+    var backupCardLocalLastText by remember { mutableStateOf("-") }
+    var backupCardServerLastText by remember { mutableStateOf("-") }
     var showNotificationOverlay by remember { mutableStateOf(false) }
     var hasUnreadNotifications by remember { mutableStateOf(false) }
 
@@ -1638,7 +1719,39 @@ fun MainFlowHost(
             hasUnreadNotifications = false
         }
     }
+
+    LaunchedEffect(showDataBackupSheet) {
+        if (!showDataBackupSheet) return@LaunchedEffect
+        val app = context.applicationContext
+        val (sizeText, localTs, serverTs) = withContext(Dispatchers.IO) {
+            Triple(
+                BackupSizeFormatter.format(BackupTargetStorageEstimator.estimateTotalBytes(app)),
+                DataBackupMetadataRepository.readLocalLastBackupTimestamp(app),
+                DataBackupMetadataRepository.readServerLastBackupTimestamp(app),
+            )
+        }
+        backupCardTotalSizeText = sizeText
+        backupCardLocalLastText = localTs?.takeIf { it > 0L }?.let { BackupUiFormatter.formatLastBackupInstant(it) } ?: "-"
+        backupCardServerLastText = serverTs?.takeIf { it > 0L }?.let { BackupUiFormatter.formatLastBackupInstant(it) } ?: "-"
+    }
+
     var showSubscriptionBottomSheet by remember { mutableStateOf(false) }
+
+    val mainActivityLifecycleOwner =
+        (context.findActivity() as? LifecycleOwner) ?: LocalLifecycleOwner.current
+    DisposableEffect(mainActivityLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event != Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
+            val act = context.findActivity() as? MainActivity ?: return@LifecycleEventObserver
+            val i = act.intent
+            if (i.getBooleanExtra(MainActivity.EXTRA_OPEN_SUBSCRIPTION_FROM_WIDGET, false)) {
+                i.removeExtra(MainActivity.EXTRA_OPEN_SUBSCRIPTION_FROM_WIDGET)
+                showSubscriptionBottomSheet = true
+            }
+        }
+        mainActivityLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { mainActivityLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var showAppLimitInfoSheet by remember { mutableStateOf(false) }
     var selectedAppForDetail by remember { mutableStateOf<MainAppRestrictionItem?>(null) }
     var restrictionRefreshKey by remember { mutableIntStateOf(0) }
@@ -1707,8 +1820,39 @@ fun MainFlowHost(
         showPauseProposalSheet = true
     }
 
+    val pickBackupZipLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            isBackupRestoring = true
+            try {
+                val r = LocalBackupImporter.restoreFromUri(context, uri)
+                when {
+                    r.fatalMessage != null -> snackbarHostState.showSnackbar(r.fatalMessage)
+                    r.success -> {
+                        snackbarHostState.showSnackbar("데이터가 복원됐어요")
+                        if (r.failedSectionLabels.isNotEmpty()) {
+                            snackbarHostState.showSnackbar(
+                                "일부 데이터 복원에 실패했어요: ${r.failedSectionLabels.joinToString(", ")}",
+                            )
+                        }
+                        navIndex = 0
+                        settingsDetail = null
+                        restrictionRefreshKey++
+                        AptoxApplication.startAppMonitorIfNeeded(context.applicationContext)
+                    }
+                    else -> snackbarHostState.showSnackbar(r.fatalMessage ?: "복원할 데이터가 없어요")
+                }
+            } finally {
+                isBackupRestoring = false
+            }
+        }
+    }
+
     BackHandler {
         when {
+            showRestoreBackupConfirm -> showRestoreBackupConfirm = false
             showSubscriptionBottomSheet -> showSubscriptionBottomSheet = false
             showNotificationOverlay -> {
                 if (firebaseAuthUid != null) {
@@ -1718,6 +1862,7 @@ fun MainFlowHost(
             }
             showTermsSheet -> showTermsSheet = false
             showPrivacySheet -> showPrivacySheet = false
+            showDataBackupSheet -> showDataBackupSheet = false
             showPauseCompleteSheet -> {
                 showPauseCompleteSheet = false
                 selectedAppForPause = null
@@ -1804,6 +1949,7 @@ fun MainFlowHost(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = AppColors.SurfaceBackgroundBackground,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -1874,22 +2020,29 @@ fun MainFlowHost(
                 Column(modifier = Modifier.fillMaxSize()) {
                 when (navIndex) {
                     0 -> {
-                        Box(modifier = Modifier.weight(1f)) {
-                            MainScreenMA01(
-                                onAddAppClick = onAddAppClickGuarded,
-                                onTimeSpecifiedClick = onTimeSpecifiedClickGuarded,
-                                onPermissionClick = {
-                                    navIndex = 3
-                                    settingsDetail = SettingsDetail.Permission
-                                },
-                                onDetailClick = { item ->
-                                    selectedAppForDetail = item
-                                    showAppLimitInfoSheet = true
-                                },
-                                onStatisticsClick = navigateToStatisticsTab,
-                                restrictionRefreshKey = restrictionRefreshKey,
-                                permissionRefreshKey = permissionRefreshKey,
-                            )
+                        val showHomeBannerAd =
+                            SubscriptionFeature.shouldShowHomeBannerAd(context.applicationContext)
+                        Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                MainScreenMA01(
+                                    onAddAppClick = onAddAppClickGuarded,
+                                    onTimeSpecifiedClick = onTimeSpecifiedClickGuarded,
+                                    onPermissionClick = {
+                                        navIndex = 3
+                                        settingsDetail = SettingsDetail.Permission
+                                    },
+                                    onDetailClick = { item ->
+                                        selectedAppForDetail = item
+                                        showAppLimitInfoSheet = true
+                                    },
+                                    onStatisticsClick = navigateToStatisticsTab,
+                                    restrictionRefreshKey = restrictionRefreshKey,
+                                    permissionRefreshKey = permissionRefreshKey,
+                                )
+                            }
+                            if (showHomeBannerAd) {
+                                AptoxBannerAd()
+                            }
                         }
                     }
                     1 -> ChallengeScreen(
@@ -2057,6 +2210,27 @@ fun MainFlowHost(
                                         }
                                     },
                                     onNotificationClick = { settingsDetail = SettingsDetail.Notification },
+                                    onDataBackupClick = { showDataBackupSheet = true },
+                                    onHomeWidgetClick = {
+                                        if (!SubscriptionFeature.canUseWidget(context.applicationContext)) {
+                                            showSubscriptionBottomSheet = true
+                                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            val awm = AppWidgetManager.getInstance(context)
+                                            val provider =
+                                                ComponentName(context, AptoxRestrictionStatusWidgetProvider::class.java)
+                                            if (awm.isRequestPinAppWidgetSupported) {
+                                                awm.requestPinAppWidget(provider, null, null)
+                                            } else {
+                                                toastReplayKey += 1
+                                                toastMessage =
+                                                    "홈 화면을 길게 누른 뒤 위젯 목록에서 추가할 수 있어요"
+                                            }
+                                        } else {
+                                            toastReplayKey += 1
+                                            toastMessage =
+                                                "홈 화면을 길게 누른 뒤 위젯 목록에서 추가할 수 있어요"
+                                        }
+                                    },
                                     onPermissionClick = { settingsDetail = SettingsDetail.Permission },
                                     onBugReportClick = { settingsDetail = SettingsDetail.BugReport },
                                     onTermsClick = { showTermsSheet = true },
@@ -2234,6 +2408,7 @@ fun MainFlowHost(
             // 일시정지 가능 조건: 제한 시간 60분 초과 & 오늘 남은 횟수 > 0
             val pauseAvailable = pauseItem != null &&
                 pauseItem.limitMinutes > 60 &&
+                pauseItem.limitMinutes < DailyUsageLimitConstants.UNLIMITED_MINUTES_SENTINEL &&
                 PauseRepository(context).getRemainingCount(pauseItem.packageName) > 0
             AppLimitPauseProposalBottomSheet(
                 onDismissRequest = {
@@ -2358,6 +2533,105 @@ fun MainFlowHost(
         PrivacyPolicyBottomSheet(onDismiss = { showPrivacySheet = false })
     }
 
+    if (showDataBackupSheet) {
+        val backupVariant =
+            if (SubscriptionFeature.canUseServerBackup(context.applicationContext)) {
+                DataBackupSheetVariant.Premium
+            } else {
+                DataBackupSheetVariant.Free
+            }
+        DataBackupBottomSheet(
+            variant = backupVariant,
+            onDismissRequest = { showDataBackupSheet = false },
+            totalSizeText = backupCardTotalSizeText,
+            lastBackupText = when (backupVariant) {
+                DataBackupSheetVariant.Premium -> backupCardServerLastText
+                DataBackupSheetVariant.Free -> backupCardLocalLastText
+            },
+            onPrimaryClick = {
+                when (backupVariant) {
+                    DataBackupSheetVariant.Free -> {
+                        val act = context as? ComponentActivity
+                        if (act == null) {
+                            showDataBackupSheet = false
+                        } else {
+                            scope.launch {
+                                isBackupRestoring = true
+                                try {
+                                    val zip = LocalBackupExporter.exportToZipFile(context)
+                                    LocalBackupExporter.shareZip(act, zip)
+                                    DataBackupMetadataRepository.setLocalBackupCompletedNow(context)
+                                    val ts = DataBackupMetadataRepository.readLocalLastBackupTimestamp(context.applicationContext)
+                                    backupCardLocalLastText = ts?.takeIf { it > 0L }?.let { BackupUiFormatter.formatLastBackupInstant(it) } ?: "-"
+                                    toastReplayKey += 1
+                                    toastMessage = "기기에 백업됐어요"
+                                } catch (_: Exception) {
+                                    toastReplayKey += 1
+                                    toastMessage = "백업에 실패했어요"
+                                } finally {
+                                    isBackupRestoring = false
+                                    showDataBackupSheet = false
+                                }
+                            }
+                        }
+                    }
+                    DataBackupSheetVariant.Premium -> {
+                        when {
+                            FirebaseAuth.getInstance().currentUser?.uid == null -> {
+                                toastReplayKey += 1
+                                toastMessage = "서버 백업은 로그인 후 가능해요"
+                            }
+                            !StatisticsData.hasUsageAccess(context.applicationContext) -> {
+                                toastReplayKey += 1
+                                toastMessage = "설정 → 권한에서 사용 통계 접근을 허용해 주세요"
+                            }
+                            else -> {
+                                scope.launch {
+                                    isBackupRestoring = true
+                                    try {
+                                        val r = UsageStatsFirestoreSync.sync(context.applicationContext, initialSync = true)
+                                        if (r.isFailure) {
+                                            toastReplayKey += 1
+                                            toastMessage = "서버 백업에 실패했어요"
+                                        } else {
+                                            DataBackupMetadataRepository.setServerBackupCompletedNow(context)
+                                            val ts = DataBackupMetadataRepository.readServerLastBackupTimestamp(context.applicationContext)
+                                            backupCardServerLastText = ts?.takeIf { it > 0L }?.let { BackupUiFormatter.formatLastBackupInstant(it) } ?: "-"
+                                            toastReplayKey += 1
+                                            toastMessage = "서버에 백업됐어요"
+                                        }
+                                    } finally {
+                                        isBackupRestoring = false
+                                        showDataBackupSheet = false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            onRestoreClick = {
+                showDataBackupSheet = false
+                showRestoreBackupConfirm = true
+            },
+        )
+    }
+
+    if (showRestoreBackupConfirm) {
+        AptoxConfirmDialog(
+            onDismissRequest = { showRestoreBackupConfirm = false },
+            title = "데이터 복원",
+            subtitle = "복원하면 현재 데이터가 덮어써져요. 계속할까요?",
+            confirmButtonText = "확인",
+            dismissButtonText = "취소",
+            onConfirmClick = {
+                showRestoreBackupConfirm = false
+                pickBackupZipLauncher.launch("application/zip")
+            },
+            onDismissButtonClick = { showRestoreBackupConfirm = false },
+        )
+    }
+
     if (showSubscriptionBottomSheet) {
         val activity = context as? ComponentActivity
         SubscriptionBottomSheet(
@@ -2371,6 +2645,17 @@ fun MainFlowHost(
                 }
             },
         )
+    }
+
+    if (isBackupRestoring) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = AppColors.TextHighlight)
+        }
     }
 
     } // Box

@@ -283,6 +283,132 @@ class UsageStatsDatabase(context: Context) : SQLiteOpenHelper(
         ).use { return it.moveToFirst() }
     }
 
+    /** 백업용: 일별 사용량 전체 */
+    fun getAllDailyUsageRows(): List<DailyUsageEntity> {
+        val db = readableDatabase
+        db.rawQuery(
+            "SELECT date, packageName, usageMs, sessionCount FROM daily_usage ORDER BY date, packageName",
+            null,
+        ).use { c ->
+            val out = mutableListOf<DailyUsageEntity>()
+            while (c.moveToNext()) {
+                out.add(
+                    DailyUsageEntity(
+                        date = c.getString(0),
+                        packageName = c.getString(1),
+                        usageMs = c.getLong(2),
+                        sessionCount = c.getInt(3),
+                    ),
+                )
+            }
+            return out
+        }
+    }
+
+    /** 백업용: 카테고리 일별 전체 */
+    fun getAllCategoryDailyRows(): List<DailyCategoryStatEntity> {
+        readableDatabase.rawQuery(
+            "SELECT date, category, usageMs FROM category_daily ORDER BY date, category",
+            null,
+        ).use { c ->
+            val out = mutableListOf<DailyCategoryStatEntity>()
+            while (c.moveToNext()) {
+                out.add(
+                    DailyCategoryStatEntity(
+                        date = c.getString(0),
+                        category = c.getString(1),
+                        usageMs = c.getLong(2),
+                    ),
+                )
+            }
+            return out
+        }
+    }
+
+    /** 백업용: 시간대 세그먼트 전체 */
+    fun getAllTimeSegmentRows(): List<DailyTimeSegmentEntity> {
+        val cols = (0 until SLOT_COUNT).map { "s$it" }.toTypedArray()
+        readableDatabase.query(
+            "time_segment_daily",
+            arrayOf("date", "packageName") + cols,
+            null,
+            null,
+            null,
+            null,
+            "date, packageName",
+        ).use { c ->
+            val out = mutableListOf<DailyTimeSegmentEntity>()
+            while (c.moveToNext()) {
+                val slots = LongArray(SLOT_COUNT) { i -> c.getLong(2 + i) }
+                out.add(
+                    DailyTimeSegmentEntity(
+                        date = c.getString(0),
+                        packageName = c.getString(1),
+                        slotMs = slots,
+                    ),
+                )
+            }
+            return out
+        }
+    }
+
+    /**
+     * 복원용: 파싱된 데이터로 테이블별 교체. [replaceDaily] 등이 false이면 해당 테이블은 삭제·삽입하지 않음.
+     * 호출 전후로 DB 인스턴스는 동일 파일을 가리킨다.
+     */
+    fun restoreUsageTablesSelective(
+        replaceDaily: Boolean,
+        dailyRows: List<DailyUsageEntity>,
+        replaceCategory: Boolean,
+        categoryRows: List<DailyCategoryStatEntity>,
+        replaceSegment: Boolean,
+        segmentRows: List<DailyTimeSegmentEntity>,
+    ) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if (replaceDaily) {
+                db.delete("daily_usage", null, null)
+                for (e in dailyRows) {
+                    val cv = ContentValues().apply {
+                        put("date", e.date)
+                        put("packageName", e.packageName)
+                        put("usageMs", e.usageMs)
+                        put("sessionCount", e.sessionCount)
+                    }
+                    db.insert("daily_usage", null, cv)
+                }
+            }
+            if (replaceCategory) {
+                db.delete("category_daily", null, null)
+                for (r in categoryRows) {
+                    val cv = ContentValues().apply {
+                        put("date", r.date)
+                        put("category", r.category)
+                        put("usageMs", r.usageMs)
+                    }
+                    db.insert("category_daily", null, cv)
+                }
+            }
+            if (replaceSegment) {
+                db.delete("time_segment_daily", null, null)
+                for (r in segmentRows) {
+                    val cv = ContentValues().apply {
+                        put("date", r.date)
+                        put("packageName", r.packageName)
+                        for (i in 0 until SLOT_COUNT) {
+                            put("s$i", r.slotMs[i])
+                        }
+                    }
+                    db.insert("time_segment_daily", null, cv)
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     companion object {
         private const val SLOT_COUNT = 12
     }

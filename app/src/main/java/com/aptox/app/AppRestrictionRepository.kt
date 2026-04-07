@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.aptox.app.model.AppRestriction
+import com.aptox.app.widget.RestrictionsWidgetUpdateHelper
 
 class AppRestrictionRepository(private val context: Context) {
 
@@ -17,6 +18,7 @@ class AppRestrictionRepository(private val context: Context) {
         val index = list.indexOfFirst { it.packageName == restriction.packageName }
         if (index >= 0) list[index] = restriction else list.add(restriction)
         prefs.edit().putString(KEY_RESTRICTIONS, serialize(list)).apply()
+        RestrictionsWidgetUpdateHelper.updateAll(context)
         if (wasEmpty && list.isNotEmpty()) {
             Log.d(TAG, "badge_001 트리거: 최초 앱 제한 저장 (package=${restriction.packageName}) → onFirstRestrictionSaved 호출")
             BadgeAutoGrant.onFirstRestrictionSaved(context.applicationContext)
@@ -34,10 +36,18 @@ class AppRestrictionRepository(private val context: Context) {
     fun delete(packageName: String) {
         val list = getAll().filter { it.packageName != packageName }
         prefs.edit().putString(KEY_RESTRICTIONS, serialize(list)).apply()
+        RestrictionsWidgetUpdateHelper.updateAll(context)
     }
 
     fun clearAll() {
         prefs.edit().remove(KEY_RESTRICTIONS).apply()
+        RestrictionsWidgetUpdateHelper.updateAll(context)
+    }
+
+    /** 백업 복원: 목록 전체를 한 번에 교체 ([commit]). */
+    fun replaceAll(restrictions: List<AppRestriction>) {
+        prefs.edit().putString(KEY_RESTRICTIONS, serialize(restrictions)).commit()
+        RestrictionsWidgetUpdateHelper.updateAll(context)
     }
 
     /**
@@ -67,6 +77,7 @@ class AppRestrictionRepository(private val context: Context) {
         }
         if (changed) {
             prefs.edit().putString(KEY_RESTRICTIONS, serialize(list)).apply()
+            RestrictionsWidgetUpdateHelper.updateAll(context)
         }
         return changed
     }

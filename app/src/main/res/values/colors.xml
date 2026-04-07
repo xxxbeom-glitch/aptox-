@@ -30,4 +30,6 @@
     <color name="widget_surface">#FFFFFFFF</color>
     <color name="widget_text_primary">#FF262626</color>
     <color name="widget_text_highlight">#FF6C54DD</color>
+    <!-- AppColors.SurfaceBackgroundBackground (Grey100) — 위젯 4x1 배경 -->
+    <color name="widget_restrictions_bg">#FFF5F5F5</color>
 </resources>

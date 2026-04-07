@@ -535,6 +535,10 @@ public class AppMonitorService extends Service {
             // 일일 사용량 차단: 수동 타이머(ManualTimerRepository) 기준. 홈 카드(StubScreens)와 동일.
             // UsageStatsManager는 카운트 정지 후에도 당일 포그라운드 시간이 남아 즉시 초과 차단되는 버그가 있었음.
             int limitMinutes = currentRestrictionMap.getOrDefault(pkg, 60);
+            if (limitMinutes >= DailyUsageLimitConstants.UNLIMITED_MINUTES_SENTINEL) {
+                // "제한 없음" — 일일 한도 초과·카운트 미시작 오버레이 없음
+                shouldBlock = false;
+            } else {
             ManualTimerRepository timerRepo = new ManualTimerRepository(this);
             long todayUsageMs = timerRepo.getTodayUsageMs(pkg);
             Log.d(TAG, "체크(일일) | " + pkg + " 오늘(수동타이머)=" + (todayUsageMs / 60000) + "분 | 제한=" + limitMinutes + "분");
@@ -593,6 +597,7 @@ public class AppMonitorService extends Service {
                         DailyUsageNotificationHelper.INSTANCE.sendDeadlineImminentNotification(this, appName, pkg);
                     }
                 }
+            }
             }
         }
 

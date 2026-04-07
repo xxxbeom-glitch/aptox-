@@ -11,6 +11,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aptox.app.usage.DailyUsageFirestoreRepository
 import com.aptox.app.usage.UsageStatsSyncWorker
+import com.google.android.gms.ads.MobileAds
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.aptox.app.subscription.PremiumStatusRepository
@@ -36,7 +37,15 @@ class AptoxApplication : Application() {
                 AptoxUncaughtExceptionHandler(this, defaultHandler),
             )
         }
+        MobileAds.initialize(this) {}
+        Log.i(
+            TAG,
+            "AdMob 초기화 완료. externalTest 등 실제 단위 ID로 실기기 테스트 시 logcat의 " +
+                "\"Use RequestConfiguration.Builder().setTestDeviceIds\"에 나온 해시를 복사해 " +
+                "MobileAds.setRequestConfiguration으로 등록하세요. dev 플레이버는 Google 테스트 단위 ID 사용.",
+        )
         NotificationPreferences.migrateIfNeeded(this)
+        TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(this)
         UserPreferencesRepository.migrateClearLegacyHomeUserNameIfNeeded(this)
         applicationScope.launch {
             val initial = PremiumStatusRepository.readSubscribed(this@AptoxApplication)
@@ -127,17 +136,8 @@ class AptoxApplication : Application() {
             ExistingPeriodicWorkPolicy.KEEP,
             periodicRequest,
         )
-        // 최초 앱 실행 시 즉시 1회 동기화 + Firestore 백업
-        if (StatisticsData.hasUsageAccess(this)) {
-            val initialRequest = androidx.work.OneTimeWorkRequestBuilder<UsageStatsSyncWorker>()
-                .setInputData(androidx.work.workDataOf(UsageStatsSyncWorker.KEY_INITIAL_SYNC to true))
-                .build()
-            workManager.enqueueUniqueWork(
-                "usage_stats_initial_sync",
-                androidx.work.ExistingWorkPolicy.KEEP,
-                initialRequest,
-            )
-        }
+        // 최초 앱 실행: 권한 있으면 즉시 7일 백필 워커, 없으면 플래그 후 메인/온보딩에서 보정
+        UsageStatsInitialSync.onApplicationColdStart(this)
     }
 
 }

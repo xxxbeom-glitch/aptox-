@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
  * 마이 페이지 화면 (Figma MY-01, node 628-3863)
  * - 내 계정: 계정 관리
  * - 제한 앱 관리: 앱 카테고리 수정, 앱 사용제한 기록
- * - 시스템: 알림, 권한 설정
+ * - 시스템: 알림, 데이터 백업, 권한 설정
  */
 @Composable
 fun MyPageScreen(
@@ -43,6 +43,9 @@ fun MyPageScreen(
     onAppRestrictionHistoryClick: () -> Unit = {},
     onSubscriptionManageClick: () -> Unit = {},
     onNotificationClick: () -> Unit = {},
+    onDataBackupClick: () -> Unit = {},
+    /** 홈 화면 위젯 핀(안내) — 무료 시 호출부에서 구독 시트 */
+    onHomeWidgetClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onBugReportClick: () -> Unit = {},
     onTermsClick: () -> Unit = {},
@@ -93,6 +96,18 @@ fun MyPageScreen(
                     iconResId = R.drawable.ic_notisetting,
                     label = "알림",
                     onClick = onNotificationClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_data_backup,
+                    label = "데이터 백업",
+                    onClick = onDataBackupClick,
+                )
+                MyPageDivider()
+                MyPageRowItem(
+                    iconResId = R.drawable.ic_nav_home,
+                    label = "홈 화면 위젯",
+                    onClick = onHomeWidgetClick,
                 )
                 MyPageDivider()
                 MyPageRowItem(

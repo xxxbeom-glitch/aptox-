@@ -1,7 +1,6 @@
 package com.aptox.app
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
@@ -45,21 +44,23 @@ object AccountWithdrawalHelper {
     }
 
     private fun showThankYouDialogThenRestart(activity: Activity) {
-        AlertDialog.Builder(activity)
-            .setTitle("이용해주셔서 감사합니다")
-            .setPositiveButton("확인") { _, _ ->
+        val ca = activity as? ComponentActivity ?: return
+        ca.showAptoxConfirmDialog(
+            title = "이용해주셔서 감사합니다",
+            confirmButtonText = "확인",
+            cancelable = false,
+            onConfirm = {
                 val intent = Intent(activity, MainActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
                 activity.startActivity(intent)
-                (activity as? ComponentActivity)?.finishAffinity()
+                ca.finishAffinity()
                 Handler(Looper.getMainLooper()).postDelayed(
                     { Process.killProcess(Process.myPid()) },
                     250L,
                 )
-            }
-            .setCancelable(false)
-            .show()
+            },
+        )
     }
 
     @OptIn(DelicateCoroutinesApi::class)

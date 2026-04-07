@@ -83,9 +83,29 @@ fun AptoxTwoLineButton(
     enabled: Boolean = true,
     ghostEnabled: Boolean = enabled,
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
+    /** true면 상단 버튼을 삭제 등 경고색으로 표시 */
+    primaryDestructive: Boolean = false,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AptoxPrimaryButton(text = primaryText, onClick = onPrimaryClick, enabled = enabled, shape = shape)
+        if (primaryDestructive) {
+            Button(
+                onClick = onPrimaryClick,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().height(60.dp),
+                shape = shape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.Red300,
+                    contentColor = Color.White,
+                    disabledContainerColor = AppColors.ButtonPrimaryBgDisabled,
+                    disabledContentColor = AppColors.ButtonPrimaryTextDisabled,
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 16.dp),
+            ) {
+                Text(text = primaryText, style = AppTypography.ButtonLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
+        } else {
+            AptoxPrimaryButton(text = primaryText, onClick = onPrimaryClick, enabled = enabled, shape = shape)
+        }
         AptoxGhostButton(text = ghostText, onClick = onGhostClick, enabled = ghostEnabled, shape = shape)
     }
 }

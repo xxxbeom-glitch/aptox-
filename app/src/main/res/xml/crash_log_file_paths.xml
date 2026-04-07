@@ -8,4 +8,8 @@
     <cache-path
         name="crash_exports"
         path="crash_exports/" />
+    <!-- Aptox 로컬 데이터 ZIP 백업 공유 -->
+    <cache-path
+        name="aptox_backup_exports"
+        path="aptox_backup_exports/" />
 </paths>

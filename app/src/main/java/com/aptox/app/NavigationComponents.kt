@@ -1,5 +1,11 @@
 package com.aptox.app
 
+import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +54,7 @@ data class NavDestination(
 // Figma: App Bar - 1~4 On
 // 80dp 영역, 아이콘 24dp / Caption1 12sp, 선택 시 Primary300 / 비선택 Grey400
 // 상단 모서리 둥글게 (bottom nav이므로 화면 하단에서 위쪽 모서리가 둥글게)
-// 하단 프리미엄 배너 42dp, #2B2B2B (Figma App Bar - 1 On, node 405:5640)
+// 하단 프리미엄 배너 42dp — 배경은 레드→핑크→퍼플→블루 2초 간격 순환(무한)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -100,11 +107,28 @@ fun AptoxBottomNavBar(
         }
 
         if (showPremiumBanner && onPremiumClick != null) {
+            val infiniteTransition = rememberInfiniteTransition(label = "premiumBannerBg")
+            val premiumBannerBg by infiniteTransition.animateColor(
+                initialValue = Color(0xFFE53935),
+                targetValue = Color(0xFFE53935),
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = 8_000
+                        Color(0xFFE53935) at 0 using LinearEasing
+                        Color(0xFFE91E8C) at 2_000 using LinearEasing
+                        Color(0xFF6C54DD) at 4_000 using LinearEasing
+                        Color(0xFF1E88E5) at 6_000 using LinearEasing
+                        Color(0xFFE53935) at 8_000 using LinearEasing
+                    },
+                    repeatMode = RepeatMode.Restart,
+                ),
+                label = "premiumBannerBgColor",
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(42.dp)
-                    .background(Color(0xFF2B2B2B))
+                    .background(premiumBannerBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -116,12 +140,12 @@ fun AptoxBottomNavBar(
             ) {
                 Text(
                     text = premiumBannerText,
-                    style = AppTypography.ButtonSmall.copy(color = AppColors.TextInvert),
+                    style = AppTypography.ButtonSmall.copy(color = Color.White),
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = AppColors.TextInvert,
+                    tint = Color.White,
                     modifier = Modifier.size(18.dp),
                 )
             }

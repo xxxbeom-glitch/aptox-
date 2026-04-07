@@ -1,7 +1,6 @@
 package com.aptox.app.subscription
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -9,7 +8,9 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.activity.ComponentActivity
 import com.aptox.app.MainActivity
+import com.aptox.app.showAptoxConfirmDialog
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -305,17 +306,18 @@ object SubscriptionBillingController {
         if (!pendingShowSubscriptionCompleteDialog) return
         pendingShowSubscriptionCompleteDialog = false
         if (!playReportsActiveSubscription) return
-        val act = billingFlowActivityRef?.get() ?: return
-        AlertDialog.Builder(act)
-            .setTitle("구독이 완료되었습니다")
-            .setPositiveButton("확인") { _, _ ->
+        val act = billingFlowActivityRef?.get() as? ComponentActivity ?: return
+        act.showAptoxConfirmDialog(
+            title = "구독이 완료되었습니다",
+            confirmButtonText = "확인",
+            cancelable = false,
+            onConfirm = {
                 val intent = Intent(act, MainActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
                 act.startActivity(intent)
-            }
-            .setCancelable(false)
-            .show()
+            },
+        )
     }
 
     /** Play 구독 관리(해지·결제수단) 화면 */

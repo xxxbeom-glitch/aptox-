@@ -261,11 +261,45 @@ private suspend fun snapColumnToNearestAndResolveIndex(
     }
 }
 
+private fun computeCenterVisibleRowIndex(
+    listState: LazyListState,
+    cellHeightPx: Float,
+): Int {
+    val firstVisible = listState.firstVisibleItemIndex
+    val scrollOffset = listState.firstVisibleItemScrollOffset
+    return if (scrollOffset > cellHeightPx / 2f) firstVisible + 1 else firstVisible
+}
+
+/** Lazy 행 기준 중앙에 보이는 [items] 인덱스. 패딩 빈 행이 중앙이면 null */
+private fun computeCenterItemIndex(
+    listState: LazyListState,
+    cellHeightPx: Float,
+    itemsSize: Int,
+    paddingRows: Int,
+): Int? {
+    val centerRow = computeCenterVisibleRowIndex(listState, cellHeightPx)
+    val itemIdx = centerRow - paddingRows
+    return if (itemIdx in 0 until itemsSize) itemIdx else null
+}
+
+/** 뷰포트 중앙이 [itemIndex]에 해당하는 행이 되도록 스크롤 */
+private suspend fun scrollCenterToItemIndex(
+    listState: LazyListState,
+    itemIndex: Int,
+    paddingRows: Int,
+    totalLazyItems: Int,
+) {
+    if (totalLazyItems <= 0) return
+    val lazyFirst = (itemIndex + paddingRows - 1).coerceIn(0, totalLazyItems - 1)
+    listState.scrollToItem(lazyFirst, 0)
+}
+
 /**
  * 단일 드럼롤 컬럼
  *
  * - `isScrollInProgress`가 false가 되는 시점에 [snapColumnToNearestAndResolveIndex]로 스냅
  * - 강조 인덱스는 LazyListState를 직접 읽어 중앙 셀과 동일한 식으로 계산 (스크롤 중에도 일치)
+ * - [lockedItemIndices] + [onLockedRegionEntered]: 잠긴 항목은 비활성 스타일만, 중앙이 잠긴 영역에 들어가려 하면 콜백 후 마지막 무료 항목으로 되돌림
  */
 @Composable
 private fun DrumrollColumn(
@@ -273,6 +307,10 @@ private fun DrumrollColumn(
     items: List<String>,
     cellHeightPx: Float,
     modifier: Modifier = Modifier,
+    /** `items` 인덱스 기준 잠금(프리미엄) 행 — 자물쇈 없이 비활성 색 + 스크롤 게이트 */
+    lockedItemIndices: Set<Int> = emptySet(),
+    /** 잠긴 영역으로 스크롤하려 할 때(또는 스냅 결과가 잠김일 때) — 구독 유도 등 */
+    onLockedRegionEntered: (() -> Unit)? = null,
 ) {
     val padding = VISIBLE_CELLS / 2  // 위아래 빈 셀 수 = 1
     val paddedItems = buildList {
@@ -280,18 +318,72 @@ private fun DrumrollColumn(
         addAll(items)
         repeat(padding) { add("") }
     }
+    val scope = rememberCoroutineScope()
+    val lastFreeItemIndex = remember(lockedItemIndices) {
+        lockedItemIndices.minOrNull()?.minus(1)?.takeIf { it >= 0 }
+    }
+    val gateActive =
+        onLockedRegionEntered != null && lockedItemIndices.isNotEmpty() && lastFreeItemIndex != null
 
-    LaunchedEffect(listState, cellHeightPx, items.size) {
+    var lastLockedNotifyMs by remember { mutableStateOf(0L) }
+    fun notifyLockedRegionEntered() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastLockedNotifyMs < 420L) return
+        lastLockedNotifyMs = now
+        onLockedRegionEntered?.invoke()
+    }
+
+    suspend fun snapBackToLastFreeIfNeeded(snappedItemIndex: Int) {
+        if (!gateActive || lastFreeItemIndex == null) return
+        if (snappedItemIndex !in lockedItemIndices) return
+        notifyLockedRegionEntered()
+        scrollCenterToItemIndex(
+            listState,
+            lastFreeItemIndex,
+            padding,
+            paddedItems.size,
+        )
+    }
+
+    LaunchedEffect(listState, cellHeightPx, items.size, gateActive, lastFreeItemIndex) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .filter { !it }
             .collect {
-                snapColumnToNearestAndResolveIndex(
+                val idx = snapColumnToNearestAndResolveIndex(
                     listState,
                     cellHeightPx,
                     paddedItemCount = paddedItems.size,
                     itemsSize = items.size,
                 )
+                snapBackToLastFreeIfNeeded(idx)
+            }
+    }
+
+    LaunchedEffect(listState, cellHeightPx, items.size, gateActive, lastFreeItemIndex) {
+        if (!gateActive || lastFreeItemIndex == null) return@LaunchedEffect
+        var prevCenter: Int? = null
+        snapshotFlow {
+            computeCenterItemIndex(listState, cellHeightPx, items.size, padding)
+        }
+            .distinctUntilChanged()
+            .collect { center ->
+                if (center != null &&
+                    center in lockedItemIndices &&
+                    prevCenter != null &&
+                    prevCenter !in lockedItemIndices
+                ) {
+                    notifyLockedRegionEntered()
+                    scope.launch {
+                        scrollCenterToItemIndex(
+                            listState,
+                            lastFreeItemIndex,
+                            padding,
+                            paddedItems.size,
+                        )
+                    }
+                }
+                prevCenter = center
             }
     }
 
@@ -324,6 +416,9 @@ private fun DrumrollColumn(
         items(paddedItems.size) { index ->
             val isSelected = index == highlightIndex
             val isEmpty = paddedItems[index].isEmpty()
+            val itemIdx = index - padding
+            val isLocked =
+                !isEmpty && itemIdx >= 0 && itemIdx < items.size && itemIdx in lockedItemIndices
 
             Box(
                 modifier = Modifier
@@ -332,7 +427,7 @@ private fun DrumrollColumn(
                     .then(
                         when {
                             isEmpty -> Modifier
-                            isSelected -> Modifier
+                            isSelected && !isLocked -> Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(AppColors.Primary200)
                             else -> Modifier
@@ -347,11 +442,17 @@ private fun DrumrollColumn(
                     Text(
                         text = paddedItems[index],
                         style = AppTypography.HeadingH3.copy(
-                            color = if (isSelected) AppColors.Primary300 else AppColors.TextPrimary,
+                            color = when {
+                                isLocked -> AppColors.TextDisabled
+                                isSelected && !isLocked -> AppColors.Primary300
+                                else -> AppColors.TextPrimary
+                            },
                             textAlign = TextAlign.Center,
                         ),
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
                     )
                 }
             }
@@ -373,6 +474,9 @@ fun DrumrollDurationPickerBottomSheet(
     confirmButtonText: String = "다음",
     onDismissRequest: () -> Unit,
     onConfirm: (index: Int, value: String) -> Unit,
+    /** [items] 인덱스. 잠긴 항목은 스크롤·확인으로 선택되지 않으며, 진입 시 [onLockedSelectionAttempt] 후 마지막 무료 항목으로 스크롤 */
+    lockedItemIndices: Set<Int> = emptySet(),
+    onLockedSelectionAttempt: (() -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
 
@@ -419,6 +523,8 @@ fun DrumrollDurationPickerBottomSheet(
                 items = items,
                 cellHeightPx = cellHeightPx,
                 modifier = Modifier.fillMaxWidth(),
+                lockedItemIndices = lockedItemIndices,
+                onLockedRegionEntered = onLockedSelectionAttempt?.takeIf { lockedItemIndices.isNotEmpty() },
             )
 
             Spacer(modifier = Modifier.height(46.dp))
@@ -433,6 +539,18 @@ fun DrumrollDurationPickerBottomSheet(
                             paddedItemCount(items.size),
                             itemsSize = items.size,
                         )
+                        if (idx in lockedItemIndices) {
+                            onLockedSelectionAttempt?.invoke()
+                            val lf = (lockedItemIndices.minOrNull() ?: return@launch) - 1
+                            val pad = VISIBLE_CELLS / 2
+                            scrollCenterToItemIndex(
+                                listState,
+                                lf.coerceAtLeast(0),
+                                pad,
+                                paddedItemCount(items.size),
+                            )
+                            return@launch
+                        }
                         onConfirm(idx, items[idx])
                     }
                 },

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_daily_limit_description"
-    android:initialLayout="@layout/widget_daily_limit"
+    android:initialLayout="@layout/widget_restrictions_4x1"
     android:minWidth="250dp"
-    android:minHeight="136dp"
-    android:previewLayout="@layout/widget_daily_limit"
+    android:minHeight="56dp"
+    android:previewLayout="@layout/widget_restrictions_4x1"
     android:resizeMode="none"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

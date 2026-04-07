@@ -240,9 +240,13 @@ fun IcoNavRight(
 /** 앱 아이콘 클리핑용 — 사각형 6dp 라운드 (Figma 가이드) */
 private val AppIconShape = RoundedCornerShape(6.dp)
 
-/** 앱 아이콘 스타일 — Inner Border 0.5dp #000000 7% */
+/**
+ * 앱 아이콘 테두리 (디자인 고정 — 되돌리지 말 것)
+ * - 너비 0.5.dp, 색 Black 8% 알파
+ * - 외곽 [Modifier] 체인: **border 먼저, clip 나중** ([AppIconBox], [AppIconBoxOrGreyIfUninstalled], [AppIconSquircleLock], [RestrictedAppIconBox])
+ */
 private val AppIconBorderWidth = 0.5.dp
-private val AppIconBorderColor = Color.Black.copy(alpha = 0.07f)
+private val AppIconBorderColor = Color.Black.copy(alpha = 0.08f)
 
 /** 기기 AdaptiveIcon 마스크 Shape. 실패 시 RoundedCornerShape(50%) 폴백 */
 @Composable
@@ -297,8 +301,8 @@ fun AppIconSquircleLock(
     Box(
         modifier = modifier
             .size(iconSize)
-            .clip(maskShape)
-            .border(AppIconBorderWidth, AppIconBorderColor, maskShape),
+            .border(AppIconBorderWidth, AppIconBorderColor, maskShape)
+            .clip(maskShape),
     ) {
         Icon(
             painter = appIcon,
@@ -337,8 +341,8 @@ fun RestrictedAppIconBox(
     Box(
         modifier = modifier
             .size(size)
-            .clip(AppIconShape)
-            .border(AppIconBorderWidth, AppIconBorderColor, AppIconShape),
+            .border(AppIconBorderWidth, AppIconBorderColor, AppIconShape)
+            .clip(AppIconShape),
     ) {
         Icon(
             painter = appIcon,
@@ -376,8 +380,8 @@ fun AppIconBoxOrGreyIfUninstalled(
     Box(
         modifier = modifier
             .size(size)
-            .clip(maskShape)
-            .border(AppIconBorderWidth, AppIconBorderColor, maskShape),
+            .border(AppIconBorderWidth, AppIconBorderColor, maskShape)
+            .clip(maskShape),
     ) {
         if (painter != null) {
             Icon(
@@ -415,8 +419,8 @@ fun AppIconBox(
     Box(
         modifier = modifier
             .size(size)
-            .clip(maskShape)
-            .then(if (!force6dpClip) Modifier.border(AppIconBorderWidth, AppIconBorderColor, maskShape) else Modifier),
+            .border(AppIconBorderWidth, AppIconBorderColor, maskShape)
+            .clip(maskShape),
     ) {
         Icon(
             painter = appIcon,

@@ -1603,11 +1603,12 @@ private fun DebugTestSettingsSection() {
             )
         }
         if (showBadgeGranted != null) {
-            androidx.compose.material3.AlertDialog(
+            AptoxConfirmDialog(
                 onDismissRequest = { showBadgeGranted = null },
-                title = { Text("뱃지 지급됨") },
-                text = { Text("${showBadgeGranted} 가 Firestore에 저장되었습니다.") },
-                confirmButton = { androidx.compose.material3.TextButton(onClick = { showBadgeGranted = null }) { Text("확인") } },
+                title = "뱃지 지급됨",
+                subtitle = "${showBadgeGranted} 가 Firestore에 저장되었습니다.",
+                confirmButtonText = "확인",
+                onConfirmClick = { showBadgeGranted = null },
             )
         }
         DebugDivider()
@@ -1646,7 +1647,13 @@ private fun DebugTestSettingsSection() {
             }
         }
         if (showProgressResult != null) {
-            androidx.compose.material3.AlertDialog(onDismissRequest = { showProgressResult = null }, title = { Text("달성 처리") }, text = { Text(showProgressResult!!) }, confirmButton = { androidx.compose.material3.TextButton(onClick = { showProgressResult = null }) { Text("확인") } })
+            AptoxConfirmDialog(
+                onDismissRequest = { showProgressResult = null },
+                title = "달성 처리",
+                subtitle = showProgressResult!!,
+                confirmButtonText = "확인",
+                onConfirmClick = { showProgressResult = null },
+            )
         }
         DebugDivider()
 
@@ -1712,28 +1719,13 @@ private fun DebugDropdownRow(
         Text(text = "▼", style = AppTypography.Caption1.copy(color = AppColors.TextBody))
     }
     if (showDialog) {
-        androidx.compose.material3.AlertDialog(
+        AptoxOptionsListDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text(label) },
-            text = {
-                Column(
-                    modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    options.forEachIndexed { index, opt ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(index); showDialog = false }
-                                .padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(opt, style = AppTypography.BodyMedium.copy(color = if (index == selectedIndex) AppColors.Primary400 else AppColors.TextPrimary))
-                        }
-                    }
-                }
-            },
-            confirmButton = { androidx.compose.material3.TextButton(onClick = { showDialog = false }) { Text("닫기") } },
+            title = label,
+            options = options,
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+            closeButtonText = "닫기",
         )
     }
 }

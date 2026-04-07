@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x1: 가로 스크롤 제한 앱 상태 (RemoteViews 루트) -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/widget_restrictions_bg"
+    android:paddingStart="8dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="6dp">
+
+    <HorizontalScrollView
+        android:id="@+id/widget_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/widget_items_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fontFamily="@font/suit_body_medium"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/widget_empty_add_restrictions"
+        android:textColor="@color/widget_text_primary"
+        android:textSize="13sp"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/widget_free_user_message"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fontFamily="@font/suit_body_medium"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/widget_free_user_hint"
+        android:textColor="@color/widget_text_primary"
+        android:textSize="12sp"
+        android:visibility="gone" />
+</FrameLayout>

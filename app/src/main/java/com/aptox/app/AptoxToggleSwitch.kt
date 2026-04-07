@@ -38,7 +38,9 @@ fun AptoxToggleSwitch(
 ) {
     val trackColor by animateColorAsState(
         targetValue = when {
-            !enabled -> AppColors.Grey200
+            // 기기 알림 꺼짐 등으로 스위치만 비활성일 때: prefs 는 ON 인데 트랙이 항상 회색이면 "꺼짐"으로 오인됨
+            checked && !enabled -> AppColors.Primary400.copy(alpha = 0.38f)
+            !checked && !enabled -> AppColors.Grey200
             checked -> AppColors.Primary400
             else -> AppColors.Grey250
         },

@@ -1,9 +1,13 @@
 package com.aptox.app
 
+import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.aptox.app.widget.AptoxRestrictionStatusWidgetProvider
+import com.aptox.app.widget.RestrictionsWidgetRefreshScheduler
 
 /**
  * 기기 재부팅 후 BOOT_COMPLETED 수신 시 AppMonitorService를 재시작합니다.
@@ -25,6 +29,13 @@ class BootCompletedReceiver : BroadcastReceiver() {
             TimeSpecifiedRestrictionAlarmScheduler.scheduleAll(ctx)
             DailyUsageAlarmScheduler.scheduleResetWarningIfNeeded(ctx)
             BriefDailyAlarmScheduler.schedule(ctx)
+
+            val widgetIds = AppWidgetManager.getInstance(ctx).getAppWidgetIds(
+                ComponentName(ctx, AptoxRestrictionStatusWidgetProvider::class.java),
+            )
+            if (widgetIds.isNotEmpty()) {
+                RestrictionsWidgetRefreshScheduler.schedule(ctx)
+            }
 
         } catch (e: Throwable) {
             Log.e(TAG, "부팅 후 AppMonitor 시작 실패", e)

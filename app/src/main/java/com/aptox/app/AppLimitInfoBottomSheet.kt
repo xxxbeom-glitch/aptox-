@@ -242,6 +242,7 @@ fun AppLimitInfoBottomSheetDaily(
     val context = androidx.compose.ui.platform.LocalContext.current
     val repo = remember { ManualTimerRepository(context) }
     val logRepo = remember { AppLimitLogRepository() }
+    val isUnlimited = limitMinutes >= DailyUsageLimitConstants.UNLIMITED_MINUTES_SENTINEL
 
     fun launchApp() {
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
@@ -256,7 +257,7 @@ fun AppLimitInfoBottomSheetDaily(
         val usage = (repo.getTodayUsageMs(packageName) / 60_000).toInt()
         todayUsageMinutes = usage
         isCountActive = repo.isSessionActive(packageName)
-        if (isCountActive && usage >= limitMinutes) {
+        if (isCountActive && !isUnlimited && usage >= limitMinutes) {
             repo.endSession(packageName)
             AppLimitLogRepository.saveTimeoutEventIfNeeded(context, packageName, appName)
             isCountActive = false
@@ -276,8 +277,8 @@ fun AppLimitInfoBottomSheetDaily(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     // 카운트 진행 중일 때 1초마다 사용량 갱신 (startTimeMs 기준 now-startMs 계산으로 포그라운드에서 실시간 표시)
-    LaunchedEffect(packageName, isCountActive) {
-        if (!isCountActive) return@LaunchedEffect
+    LaunchedEffect(packageName, isCountActive, isUnlimited) {
+        if (!isCountActive || isUnlimited) return@LaunchedEffect
         while (true) {
             delay(1000L)
             todayUsageMinutes = (repo.getTodayUsageMs(packageName) / 60_000).toInt()
@@ -299,12 +300,16 @@ fun AppLimitInfoBottomSheetDaily(
         }
     }
 
-    val usageExhausted = todayUsageMinutes >= limitMinutes
+    val usageExhausted = !isUnlimited && todayUsageMinutes >= limitMinutes
 
     BaseBottomSheet(
         title = "사용량 확인",
         onDismissRequest = onDismissRequest,
         onPrimaryClick = {
+            if (isUnlimited) {
+                onDismissRequest()
+                return@BaseBottomSheet
+            }
             if (usageExhausted) return@BaseBottomSheet
             if (isCountActive) {
                 // 카운트 정지: 세션 종료 후 바텀시트 자동 닫기
@@ -342,14 +347,15 @@ fun AppLimitInfoBottomSheetDaily(
             }
         },
         primaryButtonText = when {
+            isUnlimited -> "닫기"
             usageExhausted -> "오늘 사용량을 전부 사용하셨어요"
             isCountActive -> "카운트 중지"
             else -> "카운트 시작"
         },
-        primaryButtonEnabled = !usageExhausted,
-        secondaryButtonText = "닫기",
-        onSecondaryClick = onDismissRequest,
-        dismissOnPrimaryClick = usageExhausted || isCountActive,
+        primaryButtonEnabled = isUnlimited || !usageExhausted,
+        secondaryButtonText = if (isUnlimited) null else "닫기",
+        onSecondaryClick = if (isUnlimited) null else onDismissRequest,
+        dismissOnPrimaryClick = isUnlimited || usageExhausted || isCountActive,
         modifier = modifier,
     ) {
         if (showCountStartDialog) {
@@ -377,8 +383,16 @@ fun AppLimitInfoBottomSheetDaily(
                     appName = appName,
                     appIcon = appIcon,
                     variant = AppStatusVariant.Button,
-                    usageText = if (usageExhausted) "사용 완료" else "$todayUsageMinutes/${limitMinutes}분",
-                    usageLabel = if (usageExhausted) "" else "사용 중",
+                    usageText = when {
+                        isUnlimited -> "${todayUsageMinutes}분 사용"
+                        usageExhausted -> "사용 완료"
+                        else -> "$todayUsageMinutes/${limitMinutes}분"
+                    },
+                    usageLabel = when {
+                        usageExhausted -> ""
+                        isUnlimited -> if (isCountActive) "사용 중" else ""
+                        else -> "사용 중"
+                    },
                     usageTextColor = AppColors.TextHighlight,
                     modifier = Modifier.weight(1f),
                 )
@@ -401,7 +415,7 @@ fun AppLimitInfoBottomSheetDaily(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 listOf(
-                    AppLimitSummaryRow("하루 사용량", "${limitMinutes}분"),
+                    AppLimitSummaryRow("하루 사용량", if (isUnlimited) "제한 없음" else "${limitMinutes}분"),
                     AppLimitSummaryRow("현재 사용량", "${todayUsageMinutes}분"),
                     AppLimitSummaryRow("제한 방식", "하루 사용량 제한", valueColor = AppColors.TextHighlight),
                 ).forEach { row ->

@@ -160,6 +160,9 @@ fun TimeSpecifiedFlowHost(
                 onStartTimeRowClick = { showStartPicker = true },
                 onEndTimeRowClick = { showEndPicker = true },
                 onNextClick = next@{
+                    val startMin = selectedStartTime?.let { timeStringToMinutes(it) }
+                    val endMin = selectedEndTime?.let { timeStringToMinutes(it) }
+                    if (startMin != null && endMin != null && startMin == endMin) return@next
                     val rawStartMs = selectedStartTime?.let { timeStringToTodayMs(it) }
                     val rawEndMs = selectedEndTime?.let { timeStringToTodayMs(it) }
                     if (rawStartMs == null || rawEndMs == null) return@next
@@ -266,9 +269,13 @@ fun TimeSpecifiedScreen01(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val startMin = selectedStartTime?.let { timeStringToMinutes(it) }
+    val endMin = selectedEndTime?.let { timeStringToMinutes(it) }
+    val timesEqual = startMin != null && endMin != null && startMin == endMin
     val canProceed = selectedAppName.isNotEmpty() &&
         selectedStartTime != null &&
-        selectedEndTime != null
+        selectedEndTime != null &&
+        !timesEqual
 
     Column(
         modifier = modifier
@@ -333,6 +340,18 @@ fun TimeSpecifiedScreen01(
                 .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (timesEqual) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    IcoErrorInfo()
+                    Text(
+                        text = "시작 시간과 종료 시간이 같을 수 없어요",
+                        style = AppTypography.Disclaimer.copy(color = AppColors.FormTextError),
+                    )
+                }
+            }
             AptoxPrimaryButton(
                 text = "다음",
                 onClick = onNextClick,

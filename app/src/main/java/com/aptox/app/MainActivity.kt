@@ -7,9 +7,10 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.app.ActivityCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +34,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowInsetsControllerCompat
 import android.util.Log
 import android.content.Context
+import android.widget.Toast
+import com.aptox.app.subscription.SubscriptionBillingController
+import com.aptox.app.subscription.SubscriptionManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
@@ -122,6 +127,15 @@ enum class SignUpStep {
 
 class MainActivity : ComponentActivity() {
 
+    /**
+     * 알림 미허용 시 앱이 다시 보일 때마다(최소 한 번 onStop 경과 후) 시스템 권한 팝업 시도.
+     * 권한 다이얼로그는 보통 onStop 없이 onPause만 일어나므로, 연속 onResume으로 즉시 재요청되지 않음.
+     */
+    private var shouldAttemptPostNotificationsOnNextResume = true
+
+    private val requestPostNotificationsOnAppOpenLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     /** 앱 제한 오버레이에서 일시정지 클릭 후 1단계(제안)부터 시작할 플로우 데이터 (packageName, appName, blockUntilMs) */
     private val pendingPauseFlowState = mutableStateOf<PendingPauseFlowFromOverlay?>(null)
     var pendingPauseFlowFromOverlay: PendingPauseFlowFromOverlay?
@@ -170,6 +184,15 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         AptoxApplication.startAppMonitorIfNeeded(applicationContext, clearForegroundPkg = pendingOpenBottomSheetPackage != null)
+        if (shouldAttemptPostNotificationsOnNextResume) {
+            shouldAttemptPostNotificationsOnNextResume = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPostNotificationsOnAppOpenLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     override fun onPause() {
@@ -179,6 +202,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        shouldAttemptPostNotificationsOnNextResume = true
         Log.d("AptoxMain", "onStop")
     }
 
@@ -187,19 +211,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Android 13+: 온보딩 권한 화면에서 런타임 요청(PermissionScreen). 여기서는 이미 필수 권한을 갖춘 사용자만 1회 유도(재설치·다른 기기 등).
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (areRequiredAppPermissionsGranted() &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    1001,
-                )
-            }
-        }
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = true
         }
@@ -239,6 +250,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** 주간 리포트/목표 달성 알림 탭 시 열 탭 (1=챌린지, 2=통계) */
         const val EXTRA_NAV_INDEX = "com.aptox.app.EXTRA_NAV_INDEX"
+        /** 홈 위젯(무료) 추가·탭 후 구독 바텀시트 */
+        const val EXTRA_OPEN_SUBSCRIPTION_FROM_WIDGET = "com.aptox.app.EXTRA_OPEN_SUBSCRIPTION_FROM_WIDGET"
     }
 
     private fun extractPauseFlowFromIntent(i: Intent?): PendingPauseFlowFromOverlay? {
@@ -282,6 +295,10 @@ fun SignUpFlowHost(
         FirebaseAnalytics.getInstance(context.applicationContext)
     }
 
+    val postNotificationsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* MAIN으로 이미 전환됨; 결과는 무시 */ }
+
     BackHandler(
         enabled = step == SignUpStep.ADD_APP || step == SignUpStep.TIME_SPECIFIED,
     ) {
@@ -292,6 +309,14 @@ fun SignUpFlowHost(
     val completePermissionOnboarding: () -> Unit = {
         scope.launch {
             firstRunRepo.setPermissionFigma1652OnboardingCompleted(true)
+            val appCtx = context.applicationContext
+            UsageStatsInitialSync.flushPendingInitialSyncIfNeeded(appCtx)
+            UsageStatsInitialSync.enqueueInitial7DayIfPermitted(appCtx)
+            (appCtx as? AptoxApplication)?.applicationScope?.launch(Dispatchers.Default) {
+                runCatching {
+                    AppSelectableAppsCache.set(AppSelectableAppsLoader.load(appCtx))
+                }
+            }
             step = SignUpStep.MAIN
         }
     }
@@ -399,17 +424,42 @@ fun SignUpFlowHost(
             LaunchedEffect(Unit) { step = SignUpStep.MAIN }
             Box(modifier = Modifier.fillMaxSize())
         }
-        SignUpStep.ADD_APP -> AddAppFlowHost(
-            onComplete = {
-                prefilledApp = null
-                step = SignUpStep.MAIN
-            },
-            onBackFromFirst = {
-                prefilledApp = null
-                step = SignUpStep.MAIN
-            },
-            initialPrefilledApp = prefilledApp,
-        )
+        SignUpStep.ADD_APP -> {
+            var showAddAppPremiumSheet by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.fillMaxSize()) {
+                AddAppFlowHost(
+                    onComplete = {
+                        prefilledApp = null
+                        step = SignUpStep.MAIN
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            postNotificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    onBackFromFirst = {
+                        prefilledApp = null
+                        step = SignUpStep.MAIN
+                    },
+                    initialPrefilledApp = prefilledApp,
+                    onRequestPremiumSubscription = { showAddAppPremiumSheet = true },
+                )
+                if (showAddAppPremiumSheet) {
+                    val act = context as? ComponentActivity
+                    SubscriptionBottomSheet(
+                        onDismissRequest = { showAddAppPremiumSheet = false },
+                        onSubscribe = { tier ->
+                            if (SubscriptionManager.isSubscribed(context.applicationContext)) {
+                                Toast.makeText(context, "이미 구독 중입니다", Toast.LENGTH_SHORT).show()
+                            } else {
+                                act?.let { SubscriptionBillingController.launchSubscriptionFlow(it, tier) }
+                            }
+                        },
+                    )
+                }
+            }
+        }
         SignUpStep.TIME_SPECIFIED -> TimeSpecifiedFlowHost(
             onComplete = {
                 prefilledApp = null

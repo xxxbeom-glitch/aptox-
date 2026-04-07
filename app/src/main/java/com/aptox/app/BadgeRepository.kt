@@ -4,9 +4,11 @@ import android.content.Context
 import android.util.Log
 import com.aptox.app.model.BadgeDefinition
 import com.aptox.app.model.BadgeMasterData
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import java.util.Date
 
 /**
  * Firestore users/{userId}/badges/{badgeId} 문서의 획득 정보
@@ -127,6 +129,29 @@ class BadgeRepository(
                 ?: doc.toBadgeDefinition(badgeId)
         }.sortedBy { it.order }
     }.getOrElse { emptyList() }
+
+    /**
+     * 로컬 백업 복원: 획득 시각 복구. 알림·푸시는 보내지 않음.
+     */
+    suspend fun restoreEarnedBadgeFromBackup(
+        userId: String,
+        badgeId: String,
+        achievedAtMs: Long,
+    ): Result<Unit> = runCatching {
+        val badge = BadgeMasterData.badges.find { it.id == badgeId }
+            ?: getBadge(badgeId)
+            ?: throw IllegalArgumentException("Unknown badgeId: $badgeId")
+        val ref = firestore.collection("users").document(userId).collection("badges").document(badgeId)
+        ref.set(
+            mapOf(
+                "badgeId" to badgeId,
+                "title" to badge.title,
+                "achievedAt" to Timestamp(Date(achievedAtMs)),
+                "isNotified" to true,
+            ),
+            com.google.firebase.firestore.SetOptions.merge(),
+        ).await()
+    }
 
     /**
      * users/{userId}/badges 전체 삭제.

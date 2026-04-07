@@ -71,4 +71,39 @@ object NotificationPreferences {
     }
 
     private const val KEY_LEGACY_GOAL_ACHIEVED = "goal_achieved_enabled"
+
+    /** 로컬 백업용: (키, "true"/"false") */
+    fun exportKeyValuePairs(context: Context): List<Pair<String, String>> = listOf(
+        KEY_DEADLINE_IMMINENT to isDeadlineImminentEnabled(context).toString(),
+        KEY_COUNT_REMINDER to isCountReminderEnabled(context).toString(),
+        KEY_BADGE_ACQUIRED to isBadgeAcquiredEnabled(context).toString(),
+        KEY_TIME_SPECIFIED_START to isTimeSpecifiedStartEnabled(context).toString(),
+        KEY_TIME_SPECIFIED_END to isTimeSpecifiedEndEnabled(context).toString(),
+    )
+
+    /** 백업 복원: 알 수 없는 키는 무시. 값이 true/false가 아니면 해당 키 스킵. */
+    fun importKeyValuePairs(context: Context, pairs: List<Pair<String, String>>): Boolean {
+        val ed = prefs(context).edit()
+        var any = false
+        for ((key, raw) in pairs) {
+            val v = raw.trim().lowercase()
+            val b = when (v) {
+                "true", "1" -> true
+                "false", "0" -> false
+                else -> continue
+            }
+            when (key) {
+                KEY_DEADLINE_IMMINENT -> ed.putBoolean(KEY_DEADLINE_IMMINENT, b)
+                KEY_COUNT_REMINDER -> ed.putBoolean(KEY_COUNT_REMINDER, b)
+                KEY_BADGE_ACQUIRED -> ed.putBoolean(KEY_BADGE_ACQUIRED, b)
+                KEY_TIME_SPECIFIED_START -> ed.putBoolean(KEY_TIME_SPECIFIED_START, b)
+                KEY_TIME_SPECIFIED_END -> ed.putBoolean(KEY_TIME_SPECIFIED_END, b)
+                else -> continue
+            }
+            any = true
+        }
+        if (any) ed.commit() else return false
+        TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(context.applicationContext)
+        return true
+    }
 }

@@ -1,22 +1,38 @@
 package com.aptox.app
 
+import android.graphics.drawable.ColorDrawable
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -49,17 +65,138 @@ fun AptoxRequiredPermissionDialog(
 }
 
 /**
- * 단일 버튼 확인 팝업 (Figma 1214-4443)
- * - 제목 + 부제 + 확인 버튼 1개
- * - 팝업 12dp 라운드, 타이틀-본문 16dp, 버튼 6dp 라운드
+ * 확인(·취소) 팝업 (Figma 1214-4443)
+ * - 제목 + 선택 부제 + 확인 1개 또는 확인+취소 2줄 버튼
+ * - [subtitle]이 비어 있으면 본문 영역 생략
+ * - [dismissButtonText]가 null이 아니면 [AptoxTwoLineButton] (확인 상단 · 취소 하단)
  */
 @Composable
 fun AptoxConfirmDialog(
     onDismissRequest: () -> Unit,
     title: String,
-    subtitle: String,
+    subtitle: String = "",
     confirmButtonText: String = "확인",
     onConfirmClick: () -> Unit = { onDismissRequest() },
+    dismissButtonText: String? = null,
+    onDismissButtonClick: (() -> Unit)? = null,
+    /** true면 확인 버튼을 경고색(삭제 등)으로 표시 */
+    confirmButtonDestructive: Boolean = false,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = dismissOnBackPress,
+            dismissOnClickOutside = dismissOnClickOutside,
+        ),
+    ) {
+        AptoxConfirmDialogPanel(
+            title = title,
+            subtitle = subtitle,
+            confirmButtonText = confirmButtonText,
+            onConfirmClick = onConfirmClick,
+            dismissButtonText = dismissButtonText,
+            onDismissButtonClick = onDismissButtonClick ?: onDismissRequest,
+            confirmButtonDestructive = confirmButtonDestructive,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+internal fun AptoxConfirmDialogPanel(
+    title: String,
+    subtitle: String,
+    confirmButtonText: String,
+    onConfirmClick: () -> Unit,
+    dismissButtonText: String?,
+    onDismissButtonClick: () -> Unit,
+    confirmButtonDestructive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .widthIn(max = 328.dp)
+            .shadow(6.dp, DialogPopupCorner, false, Color.Black.copy(alpha = 0.06f))
+            .clip(DialogPopupCorner)
+            .background(AppColors.SurfaceBackgroundBackground)
+            .padding(top = 32.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
+                    textAlign = TextAlign.Center,
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            if (dismissButtonText != null) {
+                AptoxTwoLineButton(
+                    primaryText = confirmButtonText,
+                    ghostText = dismissButtonText,
+                    onPrimaryClick = onConfirmClick,
+                    onGhostClick = onDismissButtonClick,
+                    shape = DialogButtonCorner,
+                    primaryDestructive = confirmButtonDestructive,
+                )
+            } else if (confirmButtonDestructive) {
+                Button(
+                    onClick = onConfirmClick,
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                    shape = DialogButtonCorner,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppColors.Red300,
+                        contentColor = Color.White,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 16.dp),
+                ) {
+                    Text(
+                        text = confirmButtonText,
+                        style = AppTypography.ButtonLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            } else {
+                AptoxPrimaryButton(
+                    text = confirmButtonText,
+                    onClick = onConfirmClick,
+                    shape = DialogButtonCorner,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 스크롤 목록 + 닫기 (디버그 드롭다운 등). M3 AlertDialog 대체.
+ */
+@Composable
+fun AptoxOptionsListDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    closeButtonText: String = "닫기",
     modifier: Modifier = Modifier,
 ) {
     Dialog(
@@ -83,30 +220,120 @@ fun AptoxConfirmDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Column(
+                Text(
+                    text = title,
+                    style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        text = title,
-                        style = AppTypography.HeadingH2.copy(color = AppColors.TextPrimary),
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        text = subtitle,
-                        style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),
-                        textAlign = TextAlign.Center,
-                    )
+                    options.forEachIndexed { index, opt ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) {
+                                    onSelect(index)
+                                    onDismissRequest()
+                                }
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = opt,
+                                style = AppTypography.BodyMedium.copy(
+                                    color = if (index == selectedIndex) AppColors.Primary400 else AppColors.TextPrimary,
+                                ),
+                            )
+                        }
+                    }
                 }
-                AptoxPrimaryButton(
-                    text = confirmButtonText,
-                    onClick = onConfirmClick,
+                AptoxGhostButton(
+                    text = closeButtonText,
+                    onClick = onDismissRequest,
                     shape = DialogButtonCorner,
                 )
             }
         }
     }
+}
+
+/**
+ * [ComponentActivity]에서 시스템 [AlertDialog] 대신 앱톡스 확인 팝업 (제목만 또는 제목+부제, 단일 확인).
+ * 구독 완료·탈퇴 감사 등 Compose 트리 밖에서 사용.
+ */
+fun ComponentActivity.showAptoxConfirmDialog(
+    title: String,
+    subtitle: String = "",
+    confirmButtonText: String = "확인",
+    cancelable: Boolean = true,
+    onDismiss: () -> Unit = {},
+    onConfirm: () -> Unit,
+) {
+    val dialog = android.app.Dialog(this)
+    dialog.window?.apply {
+        setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+        setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+    }
+    dialog.setCancelable(cancelable)
+    dialog.setCanceledOnTouchOutside(cancelable)
+    val composeView = ComposeView(this).apply {
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        setContent {
+            AptoxTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .then(
+                            if (cancelable) {
+                                Modifier.clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                ) {
+                                    dialog.dismiss()
+                                    onDismiss()
+                                }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { /* consume */ },
+                    ) {
+                        AptoxConfirmDialogPanel(
+                            title = title,
+                            subtitle = subtitle,
+                            confirmButtonText = confirmButtonText,
+                            onConfirmClick = {
+                                dialog.dismiss()
+                                onConfirm()
+                            },
+                            dismissButtonText = null,
+                            onDismissButtonClick = {},
+                            confirmButtonDestructive = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+    dialog.setContentView(composeView)
+    dialog.setOnDismissListener { onDismiss() }
+    dialog.show()
 }
 
 /**

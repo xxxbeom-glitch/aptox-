@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -261,31 +260,19 @@ fun CrashLogScreen(
     }
 
     if (showClearConfirm) {
-        AlertDialog(
+        AptoxConfirmDialog(
             onDismissRequest = { showClearConfirm = false },
-            title = { Text("크래시 로그 전체 삭제", style = AppTypography.HeadingH3) },
-            text = {
-                Text(
-                    "내부 저장소의 크래시 로그 파일을 모두 삭제할까요?",
-                    style = AppTypography.BodyMedium.copy(color = AppColors.TextBody),
-                )
+            title = "크래시 로그 전체 삭제",
+            subtitle = "내부 저장소의 크래시 로그 파일을 모두 삭제할까요?",
+            confirmButtonText = "삭제",
+            onConfirmClick = {
+                showClearConfirm = false
+                CrashLogRepository.clearAll(context)
+                refreshKey++
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearConfirm = false
-                        CrashLogRepository.clearAll(context)
-                        refreshKey++
-                    },
-                ) {
-                    Text("삭제", color = AppColors.Red300)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) {
-                    Text("취소")
-                }
-            },
+            dismissButtonText = "취소",
+            onDismissButtonClick = { showClearConfirm = false },
+            confirmButtonDestructive = true,
         )
     }
 }

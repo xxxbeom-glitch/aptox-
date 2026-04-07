@@ -13,7 +13,7 @@ object SubscriptionManager {
      * Google Play 프리미엄 구독을 사용자에게 공개할 때 `true`로 바꿉니다.
      * `false`인 동안에는 스토어·DataStore와 무관하게 **무료 플랜만** 적용합니다(DEBUG의 [debugForceSubscribed] 제외).
      */
-    const val PREMIUM_OFFERING_LIVE: Boolean = false
+    const val PREMIUM_OFFERING_LIVE: Boolean = true
 
     // 디버그 강제 설정 (개발/테스트용) — true면 항상 구독으로 간주
     var debugForceSubscribed: Boolean = false
@@ -86,6 +86,29 @@ object SubscriptionFeature {
         return SubscriptionManager.isSubscribed(context)
     }
 
-    // TODO: 기획 확정 후 추가 기능 여기에 추가
-    // fun canUseXxx(context: Context): Boolean { ... }
+    // ── 하루 사용량 제한(드럼롤) ────────────
+    // 무료: 30·60분만 선택 가능. 그 외(90분~·제한 없음)는 잠금 + 구독 유도.
+    // 유료: 전체 옵션
+    fun isDailyLimitDrumrollOptionLockedForFreeUser(optionLabel: String): Boolean {
+        return optionLabel != "30분" && optionLabel != "60분"
+    }
+
+    // ── 데이터 백업 ────────────────────────
+    /** 유료만 서버(자동) 백업 플로우 사용. 무료는 기기 수동만. */
+    fun canUseServerBackup(context: Context): Boolean =
+        SubscriptionManager.isSubscribed(context)
+
+    fun canUseLocalDeviceBackup(context: Context): Boolean = true
+
+    // ── 홈 화면 위젯(핀/안내) ───────────────
+    fun canUseWidget(context: Context): Boolean =
+        SubscriptionManager.isSubscribed(context)
+
+    // ── AdMob 홈 배너 ──────────────────────
+    fun shouldShowHomeBannerAd(context: Context): Boolean =
+        !SubscriptionManager.isSubscribed(context)
+
+    // ── 하단 구독 유도 배너(내비 하단) ─────
+    fun shouldShowPremiumUpsellNavBanner(context: Context): Boolean =
+        !SubscriptionManager.isSubscribed(context)
 }

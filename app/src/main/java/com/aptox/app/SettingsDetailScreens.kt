@@ -1,6 +1,5 @@
 package com.aptox.app
 
-import android.app.AlertDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -356,6 +356,7 @@ fun AccountManageScreen(
     onProfileClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    var showLogoutConfirm by remember { mutableStateOf(false) }
     val isGoogleLoggedIn = currentUserInfo?.providerLabel == "구글"
     val cardLabel = if (isGoogleLoggedIn) {
         googleAccountRowPrimaryText(currentUserInfo)
@@ -384,15 +385,25 @@ fun AccountManageScreen(
                 rightLabel = if (isGoogleLoggedIn) "로그아웃" else "로그인",
                 onClick = {
                     if (isGoogleLoggedIn) {
-                        AlertDialog.Builder(context)
-                            .setMessage(R.string.account_logout_confirm_message)
-                            .setPositiveButton(R.string.dialog_yes) { _, _ -> onLogout() }
-                            .setNegativeButton(R.string.dialog_no, null)
-                            .show()
+                        showLogoutConfirm = true
                     } else {
                         onGoogleClick()
                     }
                 },
+            )
+        }
+
+        if (showLogoutConfirm) {
+            AptoxConfirmDialog(
+                onDismissRequest = { showLogoutConfirm = false },
+                title = stringResource(R.string.account_logout_confirm_message),
+                confirmButtonText = stringResource(R.string.dialog_yes),
+                onConfirmClick = {
+                    showLogoutConfirm = false
+                    onLogout()
+                },
+                dismissButtonText = stringResource(R.string.dialog_no),
+                onDismissButtonClick = { showLogoutConfirm = false },
             )
         }
 
@@ -669,6 +680,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         mutableStateOf(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
     }
 
+    // 이 화면 진입 시점에 이미 RESUMED 이면 Observer 가 ON_RESUME 을 다시 보내지 않음 → 채널·prefs 불일치 방지
+    LaunchedEffect(Unit) {
+        TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(context)
+    }
+
     fun refreshDeviceNotifications() {
         deviceNotificationsEnabled = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
@@ -681,6 +697,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 countReminder = prefs.isCountReminderEnabled(context)
                 timeSpecifiedStart = prefs.isTimeSpecifiedStartEnabled(context)
                 timeSpecifiedEnd = prefs.isTimeSpecifiedEndEnabled(context)
+                TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -688,13 +705,6 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     }
 
     val toggleEnabled = deviceNotificationsEnabled
-    LaunchedEffect(badgeAcquired, deadlineImminent, countReminder, timeSpecifiedStart, timeSpecifiedEnd) {
-        prefs.setBadgeAcquiredEnabled(context, badgeAcquired)
-        prefs.setDeadlineImminentEnabled(context, deadlineImminent)
-        prefs.setCountReminderEnabled(context, countReminder)
-        prefs.setTimeSpecifiedStartEnabled(context, timeSpecifiedStart)
-        prefs.setTimeSpecifiedEndEnabled(context, timeSpecifiedEnd)
-    }
 
     Box(
         modifier = Modifier
@@ -731,7 +741,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     label = "뱃지 획득 알림",
                     subtitle = "뱃지를 획득할 때마다 알려드려요",
                     checked = badgeAcquired,
-                    onCheckedChange = { badgeAcquired = it },
+                    onCheckedChange = { v ->
+                        prefs.setBadgeAcquiredEnabled(context, v)
+                        badgeAcquired = v
+                    },
                     enabled = toggleEnabled,
                 )
             }
@@ -742,7 +755,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     label = "마감 임박 알림",
                     subtitle = "일일 한도 1분 전에 미리 알려드려요",
                     checked = deadlineImminent,
-                    onCheckedChange = { deadlineImminent = it },
+                    onCheckedChange = { v ->
+                        prefs.setDeadlineImminentEnabled(context, v)
+                        deadlineImminent = v
+                    },
                     enabled = toggleEnabled,
                 )
                 SettingsDivider()
@@ -750,7 +766,10 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     label = "카운트 중지 알림",
                     subtitle = "카운트 중지를 잊으셨을 때 알려드려요",
                     checked = countReminder,
-                    onCheckedChange = { countReminder = it },
+                    onCheckedChange = { v ->
+                        prefs.setCountReminderEnabled(context, v)
+                        countReminder = v
+                    },
                     enabled = toggleEnabled,
                 )
             }
@@ -761,7 +780,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     label = "시작 알림",
                     subtitle = "설정된 시간에 시작하면 알려드려요",
                     checked = timeSpecifiedStart,
-                    onCheckedChange = { timeSpecifiedStart = it },
+                    onCheckedChange = { v ->
+                        prefs.setTimeSpecifiedStartEnabled(context, v)
+                        timeSpecifiedStart = v
+                        TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(context)
+                    },
                     enabled = toggleEnabled,
                 )
                 SettingsDivider()
@@ -769,7 +792,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     label = "종료 알림",
                     subtitle = "설정된 시간에 끝나면 알려드려요",
                     checked = timeSpecifiedEnd,
-                    onCheckedChange = { timeSpecifiedEnd = it },
+                    onCheckedChange = { v ->
+                        prefs.setTimeSpecifiedEndEnabled(context, v)
+                        timeSpecifiedEnd = v
+                        TimeSpecifiedRestrictionNotificationHelper.syncChannelsWithPreferences(context)
+                    },
                     enabled = toggleEnabled,
                 )
             }
