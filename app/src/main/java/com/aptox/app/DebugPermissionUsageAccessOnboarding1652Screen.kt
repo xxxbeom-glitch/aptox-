@@ -141,6 +141,10 @@ fun DebugPermissionUsageAccessOnboarding1652Screen(
     val batteryGranted = remember(permissionRefresh) { context.isIgnoringBatteryOptimizations() }
     val notificationGranted = remember(permissionRefresh) { context.hasPostNotificationsGrantedForOnboarding() }
 
+    val pagerState = rememberPagerState(pageCount = { PermissionOnboardingPageCount })
+    val isLastOnboardingPage =
+        pagerState.currentPage == PermissionOnboardingPageCount - 1
+
     LaunchedEffect(permissionRefresh) {
         // 권한 설정 화면에서 돌아올 때마다 현재 페이지의 권한이 허용되었는지 확인하여 자동 이동
         val currentPage = pagerState.currentPage
@@ -163,10 +167,6 @@ fun DebugPermissionUsageAccessOnboarding1652Screen(
             }
         }
     }
-
-    val pagerState = rememberPagerState(pageCount = { PermissionOnboardingPageCount })
-    val isLastOnboardingPage =
-        pagerState.currentPage == PermissionOnboardingPageCount - 1
 
     val stepFillFraction by remember {
         derivedStateOf {
