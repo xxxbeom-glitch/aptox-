@@ -544,18 +544,20 @@ public class AppMonitorService extends Service {
             Log.d(TAG, "체크(일일) | " + pkg + " 오늘(수동타이머)=" + (todayUsageMs / 60000) + "분 | 제한=" + limitMinutes + "분");
             long limitMs = limitMinutes * 60L * 1000L;
             boolean sessionActive = timerRepo.isSessionActive(pkg);
-            if (!sessionActive) {
-                // 카운트 정지 상태: 차단 ("카운트 시작" 안내 오버레이)
-                shouldBlock = true;
-                overlayState = BlockDialogActivity.OVERLAY_STATE_COUNT_NOT_STARTED;
-            } else if (todayUsageMs >= limitMs) {
-                // 카운트 진행 중 + 사용량 초과: 차단 (timeout 이벤트 기록)
+            if (todayUsageMs >= limitMs) {
+                // 사용량 초과: 차단 (세션 여부와 무관하게 USAGE_EXCEEDED)
                 shouldBlock = true;
                 overlayState = BlockDialogActivity.OVERLAY_STATE_USAGE_EXCEEDED;
                 if (restriction != null) {
                     AppLimitLogRepository.saveTimeoutEventIfNeeded(this, pkg, restriction.getAppName());
                 }
-                timerRepo.endSession(pkg); // 세션 종료 → 노티바 카운트 정지
+                if (sessionActive) {
+                    timerRepo.endSession(pkg); // 세션이 활성 상태일 때만 종료
+                }
+            } else if (!sessionActive) {
+                // 한도가 남았지만 카운트 정지 상태: COUNT_NOT_STARTED 안내
+                shouldBlock = true;
+                overlayState = BlockDialogActivity.OVERLAY_STATE_COUNT_NOT_STARTED;
             } else {
                 // 카운트 진행 중 + 사용량 여유: 사용 허용
                 shouldBlock = false;
