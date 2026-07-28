@@ -20,6 +20,7 @@
 - 계정·백업·구독·광고 등 부가 기능은 코드에 있으면 유지·수정만 하고, 요청 없이 새 축을 늘리지 않는다
 
 세부 플로우·데이터 모델은 `docs/restriction-flow.md`, `docs/statistics-data-rules.md`를 본다.
+코드베이스 전체 맵(화면·의존성 요약)은 `docs/CODEBASE_SPEC.md`를 본다.
 
 ## Explicitly careful areas
 

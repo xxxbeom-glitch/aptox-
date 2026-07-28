@@ -20,7 +20,10 @@
 
 | 궁금한 것 | 열 곳 |
 |-----------|--------|
+| 앱 범위·위험 구역 | `agent/PROJECT_SPEC.md` |
+| 코드베이스 상세 맵 | `docs/CODEBASE_SPEC.md` |
 | 디자인/컴포넌트 | `docs/DESIGNSYSTEM.md` |
+| 디자인 변수 덤프 | `docs/design-exports/` |
 | 앱 제한 플로우 | `docs/restriction-flow.md` |
 | 통계 데이터 규칙 | `docs/statistics-data-rules.md` |
 | 뱃지 목록·정리 | `docs/badges/` |

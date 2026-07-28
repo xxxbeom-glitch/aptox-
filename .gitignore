@@ -19,6 +19,7 @@ log.txt
 *.log
 aptox_variables.json
 color_va.json
+cole_variables.json
 aptox-release.jks
 
 # Accidental root Node deps (no package.json at repo root)
@@ -28,7 +29,8 @@ aptox-release.jks
 /issue.md
 /issue-bridge-input.md
 
-# One-off source backups dumped at repo root
+# One-off dumps / backups at repo root (canonical copies live under docs/)
+/SPEC.md
 /AppMonitorService_backup.java
 
 # Firebase Functions
