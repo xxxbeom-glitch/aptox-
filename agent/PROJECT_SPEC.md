@@ -59,7 +59,7 @@
 | `SESSION_HANDOFF.md` | 세션 인수인계 |
 | `ERROR_LEDGER.md` | 반복 오류 |
 | `.cursor/rules/00-project-core.mdc` | 항상 적용되는 최소 운영 |
-| `.cursor/rules/10-android-compose-ui.mdc` | Compose 구조·상태·접근성 (Figma 수치는 `.cursorrules` 우선) |
+| `.cursor/rules/10-android-compose-ui.mdc` | Compose 구조·상태·접근성 (Figma 수치는 `agent/design/rules.md` 우선) |
 | `.cursor/rules/20-quality-and-recovery.mdc` | 빌드·검증·복구 |
 | `.cursor/rules/30-production-engineering.mdc` | 권한·데이터·릴리즈 안전 |
 
