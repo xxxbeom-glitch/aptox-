@@ -4,40 +4,36 @@
 
 ## Task
 
-- Task ID: HARNESS-003
+- Task ID: HARNESS-004
 - Screen ID: N/A
-- Area: agent/design + .cursorrules
+- Area: agent/PROJECT_SPEC.md
 
 ## Goal
 
-`.cursorrules`의 헤더·버튼·Figma 세부 규칙을 `agent/design/rules.md`로 옮기고, `.cursorrules`는 운영 요약만 남긴다.
+PROJECT_SPEC에 Aptox 위험 구역 체크리스트를 구체화한다. 앱 코드는 변경하지 않는다.
 
 ## Required
 
-- `agent/design/README.md`, `agent/design/rules.md` 추가
-- `.cursorrules` 슬림화 + 링크
-- core / Compose 규칙 / agent README·PROJECT_SPEC 경로 갱신
+- 승인 없이 하지 말 것 / 구역별 대표 파일 / 손댈 때 확인 항목 / 작업 전 질문
 
 ## Allowed Scope
 
-- 위 문서·규칙만
+- `agent/PROJECT_SPEC.md` 및 handoff·TASK_CONTRACT만
 
 ## Forbidden
 
-- `app/` 소스 변경
-- 디자인 규칙 내용 약화·삭제
+- `app/` 소스·Manifest 변경
 
 ## Verification
 
-- [x] 헤더·버튼 규칙이 `agent/design/rules.md`에 존재
-- [x] `.cursorrules`가 해당 문서를 가리킴
+- [x] Manifest·주요 클래스명과 체크리스트가 대응됨
 - [ ] Build (해당 없음)
 
 ## Done When
 
-- UI 세부 규칙 위치가 `agent/design/`으로 정리되고 기존 수치 약속이 유지됨
+- 위험 구역을 표로 찾을 수 있고, 수정 시 production review 트리거가 명시됨
 
 ## Result
 
 - Status: PASS
-- Notes: 앱 코드 미변경
+- Notes: 문서만 갱신

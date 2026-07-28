@@ -4,15 +4,12 @@
 
 ## Current Task
 
-- Task ID: HARNESS-003
+- Task ID: HARNESS-004
 - Status: COMPLETED
 
 ## Completed
 
-- `agent/design/rules.md`에 Figma·헤더·버튼 규칙 이전
-- `agent/design/README.md` 추가
-- `.cursorrules` 슬림화 (운영·커밋 + design 링크)
-- core / 10-compose / agent README·PROJECT_SPEC 경로 갱신
+- `agent/PROJECT_SPEC.md`에 위험 구역 체크리스트·금지 항목·작업 전 질문 추가
 
 ## Last Successful Verification
 
@@ -28,12 +25,12 @@
 
 ## Next Action
 
-- (선택) PROJECT_SPEC 위험 구역 체크리스트 구체화
 - (선택) Debug 화면 등록/Release 제외 규칙만 보강
 - 실제 앱 작업 시 TASK_CONTRACT 교체
+- 위험 구역 수정 시 production-readiness skill 실행
 
 ## Resume Command
 
 ```text
-agent/design/README.md 보고 이어서. UI 수치는 agent/design/rules.md. 패키지 대이동 금지.
+agent/PROJECT_SPEC.md 위험 구역 표 보고 이어서. 해당 구역 수정 시 review-production-readiness 실행.
 ```
