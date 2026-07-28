@@ -1,0 +1,59 @@
+---
+description: Build, verification, and failure recovery rules for Aptox
+alwaysApply: false
+globs:
+  - "**/*Test.kt"
+  - "**/androidTest/**"
+  - "**/test/**"
+  - "**/src/debug/**"
+  - "**/scripts/**"
+  - "**/*.gradle"
+  - "**/*.gradle.kts"
+---
+
+# Quality and Recovery Rules
+
+빌드, 테스트, 오류 복구 작업에서 적용한다.
+
+## 1. 검증 순서
+
+가능한 범위에서 아래 순서로 확인한다.
+
+1. Compile 또는 Assemble (해당 flavor 명시: `dev` / `externalTest` 등)
+2. Lint
+3. Unit Test
+4. 필요한 경우 Instrumented Test
+5. 관련 Debug 화면 또는 수동 화면 확인
+
+프로젝트에 존재하지 않는 검증 작업을 임의로 통과 처리하지 않는다.
+`scripts/verify-ui.ps1` 등 스크립트가 없으면 그 항목은 `해당없음`으로 둔다.
+
+## 2. 상태 판정
+
+- `PASS`: 필수 검증이 모두 통과했다.
+- `RETRY`: 현재 작업 범위 안에서 수정 후 다시 검증할 수 있다.
+- `BLOCKED`: 에셋, API, 설계 결정, 권한 또는 외부 환경이 필요하다.
+- `STOP`: 같은 원인으로 3회 실패했거나 범위 밖의 큰 변경이 필요하다.
+
+## 3. 오류 진단
+
+- 긴 로그에서 가장 먼저 발생한 근본 원인을 우선 찾는다.
+- 후속 연쇄 오류를 각각 별개의 원인처럼 수정하지 않는다.
+- 수정 전에 같은 오류가 `agent/ERROR_LEDGER.md`에 있는지 검색한다.
+- 해결에 필요한 최소 파일만 수정한다.
+- 의존성 버전 변경이나 대규모 리팩터링은 마지막 수단으로 사용한다.
+- 보안·데이터 손실·릴리즈·권한 규칙을 우회해 오류를 해결하지 않는다. 금지는 `30-production-engineering.mdc`를 따른다.
+
+## 4. 재시도 규칙
+
+- 수정 후에는 실패했던 동일 명령을 먼저 다시 실행한다.
+- 같은 해결책을 근거 없이 반복하지 않는다.
+- 동일 오류에 대한 두 번째 실패부터 원인 가설과 확인 결과를 기록한다.
+- 세 번째 실패 시 자동으로 `STOP` 또는 `BLOCKED`로 전환하고 필요한 외부 결정을 보고한다.
+
+## 5. 해결 판정
+
+- 명령이 실제로 성공하기 전에는 `RESOLVED`로 기록하지 않는다.
+- 우회만 적용한 경우 `WORKAROUND`로 표시한다.
+- 일부 테스트만 성공한 경우 전체 `PASS`로 표현하지 않는다.
+- 검증 환경 부재로 실행하지 못했다면 `NOT VERIFIED`와 사유를 남긴다.

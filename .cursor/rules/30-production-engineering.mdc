@@ -1,0 +1,158 @@
+---
+description: Production safety for Aptox permissions, data, network, and release
+alwaysApply: false
+globs:
+  - "**/*.kt"
+  - "**/*.java"
+  - "**/*.kts"
+  - "**/AndroidManifest.xml"
+  - "**/network_security_config.xml"
+  - "**/proguard-rules.pro"
+  - "**/libs.versions.toml"
+  - "**/local.properties"
+  - "**/backup_rules.xml"
+  - "**/data_extraction_rules.xml"
+  - "**/accessibility_service_config.xml"
+---
+
+# Production Engineering Rules
+
+Kotlin/Java, Gradle, Manifest, 네트워크, 로컬 데이터, 권한, 릴리즈 관련 작업에 적용한다.
+빌드 실패 재현·재검증은 `20-quality-and-recovery.mdc`가 담당한다.
+보안·데이터 손실·릴리즈 위험을 우회해 문제를 "해결"하지 않는다.
+
+단순 UI 수치·문구만 바꾸는 작업에는 전체 게이트를 강제하지 않는다.
+저장, 네트워크, 권한, 개인정보, 인증, 마이그레이션, 릴리즈, UsageStats, Accessibility, 차단 로직이 포함되면
+`.cursor/skills/review-production-readiness/SKILL.md`를 실행한다.
+
+## 1. 구조와 책임 분리
+
+- UI Composable/Activity 안에서 네트워크·DB·파일 저장을 새로 직접 넣지 않는다. 기존 패턴이 섞여 있어도 **확대를 막는다**.
+- Activity, Service, Receiver를 전역 데이터 저장소처럼 쓰지 않는다.
+- 거대한 Repository/Service 하나에 새 기능을 무작정 몰아넣지 않는다. 요청 범위 안에서만 최소 추가한다.
+- 패키지 대이동·모듈 분리는 `PROJECT_SPEC`에 없는 임의 작업으로 하지 않는다.
+- `agent/PROJECT_SPEC.md`에 없는 서버·SDK·분석·권한을 임의로 추가하지 않는다.
+
+## 2. Secret과 인증 정보
+
+- API Secret, 관리자 토큰, 비밀번호, 서명 키를 코드에 하드코딩하지 않는다.
+- `local.properties`, keystore, 환경 설정의 비밀값을 Git에 커밋하지 않는다.
+- 앱에 포함된 값은 사용자가 추출할 수 있다고 가정한다.
+- 로그나 오류 메시지에 토큰·인증 헤더·계정 식별자를 출력하지 않는다.
+
+## 3. 개인정보와 로그
+
+Aptox는 앱 사용 시간, 제한 설정, 계정, 백업, 알림 이력을 다룰 수 있다.
+
+- 기능에 필요한 데이터만 수집·저장한다.
+- 패키지별 사용량, 제한 설정, 이메일, 토큰, 백업 원문을 일반 로그에 출력하지 않는다.
+- 오류 로그에 전체 사용자 객체나 DB 레코드 덤프를 남기지 않는다.
+- Fake/Debug 데이터와 실제 사용자 데이터를 명확히 분리한다.
+- Debug 메뉴·테스트 화면에서 실서비스 DB를 파괴적으로 다루지 않는다.
+- 계정 삭제·데이터 초기화 시 삭제 범위를 명확히 한다.
+- Android 백업 포함/제외를 의도적으로 유지한다 (`backup_rules`, `data_extraction_rules`).
+- Release/externalTest 빌드에 상세 Debug 로그·디버그 메뉴가 남지 않게 한다 (`SHOW_DEBUG_MENU` 등).
+
+## 4. 네트워크 보안
+
+- 평문 HTTP를 기본적으로 허용하지 않는다. HTTPS를 기본으로 한다.
+- 모든 인증서를 신뢰하거나 SSL 검증을 우회하지 않는다.
+- 연결·읽기 타임아웃을 정의한다.
+- 무한 재시도를 금지하고 횟수·간격을 제한한다.
+- 서버 응답을 항상 정상이라고 가정하지 않는다.
+- 서버 오류 문구·내부 정보를 사용자 화면에 그대로 노출하지 않는다.
+- 외부 URL, Deep Link, Intent 입력값은 검증 후 사용한다.
+
+## 5. 권한과 Android 컴포넌트
+
+Aptox 핵심 권한 영역: UsageStats, Accessibility, Foreground Service, Notifications, Exact Alarm, Boot, QUERY_ALL_PACKAGES, 배터리 최적화 예외.
+
+- 실제로 사용하지 않는 권한을 Manifest에 추가하지 않는다.
+- 권한은 기능이 필요한 시점에 요청하고, 거부·다시 묻지 않음 상태를 처리한다.
+- 권한 오류를 해결하기 위해 무조건 더 넓은 권한을 추가하지 않는다.
+- Activity, Service, Receiver, Provider는 기본적으로 외부 비공개로 둔다.
+- 외부 진입이 필요한 컴포넌트만 `exported=true`로 둔다.
+- AccessibilityService·모니터 서비스의 동작을 우회·약화해 빌드만 통과시키지 않는다.
+- Intent, Deep Link, 외부 파일 경로, 전달받은 packageName/ID를 신뢰하지 않는다.
+- 차단 오버레이/다이얼로그는 사용자 설정·권한 상태에 맞는 경로만 사용한다.
+
+## 6. 오류 처리와 데이터 정합성
+
+- 비어 있는 catch 블록을 만들지 않는다.
+- 실패를 성공 상태로 처리하지 않는다.
+- 사용자에게 보여주는 오류와 개발 로그를 분리한다.
+- 저장 실패 시 기존 정상 제한 설정·사용량 데이터를 훼손하지 않는다.
+- 여러 데이터 변경이 하나의 작업이면 필요 시 transaction으로 처리한다.
+- 임시값을 반환해 실제 오류를 숨기지 않는다.
+- 오류 해결을 위해 테스트나 검증 코드를 삭제하지 않는다.
+
+## 7. 상태와 생명주기
+
+- 화면 회전, 백그라운드 복귀, 프로세스 재생성을 고려한다.
+- 중복 클릭·중복 요청·중복 알람 스케줄을 방지한다.
+- 화면이 사라지면 불필요한 Coroutine과 작업을 취소한다.
+- `GlobalScope`를 사용하지 않는다.
+- 수명이 불명확한 CoroutineScope를 만들지 않는다.
+- Foreground Service·알람·위젯 갱신은 생명주기와 권한 상태를 함께 본다.
+
+## 8. 로컬 데이터
+
+- 데이터 모델 변경 시 마이그레이션을 작성한다.
+- 마이그레이션 오류를 해결하기 위해 사용자 DB를 무조건 삭제하지 않는다.
+- destructive migration은 명시적 승인 없이 사용하지 않는다.
+- 앱 업데이트 전후 제한 설정·사용 통계·백업 호환을 검증한다.
+- 날짜·시간은 저장 형식과 화면 표시 형식을 분리한다. (자정 리셋·타임존은 `docs/restriction-flow.md` 등 기존 규칙 존중)
+- 백업 import/export는 형식 검증 후 적용하고, 실패 시 기존 데이터를 보존한다.
+
+## 9. 의존성 관리
+
+- 기능 하나를 위해 검증되지 않은 라이브러리를 무분별하게 추가하지 않는다.
+- 추가 전 기존 의존성으로 해결 가능한지 확인한다.
+- 사용하지 않는 의존성은 제거하되, 요청 범위 밖 대청소는 하지 않는다.
+- 빌드 오류를 숨기기 위해 버전을 임의로 낮추거나 올리지 않는다.
+- 동일 역할 라이브러리를 중복 사용하지 않는다.
+
+## 10. 테스트 기준
+
+- Debug 메뉴·테스트 화면만으로 완료 처리하지 않는다.
+- 제한 계산, 자정 리셋, 사용량 집계, 백업 변환 등 결정 로직은 Unit Test로 검증하는 것을 권장한다.
+- 실패한 테스트를 삭제하거나 주석 처리하지 않는다.
+- 테스트를 통과시키기 위해 실제 제한/차단 기능을 제거하지 않는다.
+
+## 11. Release 안전성
+
+- Debug 메뉴·테스트 전용 도구가 Release/`externalTest` 정책에 맞게 제외되는지 확인한다.
+- Debug 빌드만 성공한 상태를 완료로 판단하지 않는다.
+- 테스트 광고 ID·상세 로그·디버그 플래그를 출시 빌드에 그대로 두지 않는다.
+- 서명 키와 업로드 키를 저장소에 포함하지 않는다.
+- `versionCode`와 `versionName`을 의도적으로 관리한다.
+- 출시 전 권한, exported component, Accessibility 설정, 백업 설정을 다시 검토한다.
+
+## 12. 절대 금지
+
+- SSL 검증 무시 / 모든 인증서 신뢰
+- API Secret 하드코딩
+- 민감정보·사용량 원본 덤프 로그
+- 필요 없는 권한 추가 / 불필요한 `exported=true`
+- 빈 catch / 오류를 성공으로 위장
+- DB 삭제로 마이그레이션 오류 해결
+- 테스트 삭제·주석 처리 / Lint 비활성화로 문제 숨기기
+- Debug 설정을 그대로 Release에 사용
+- Accessibility·UsageStats·차단을 권한 없이 우회하는 편법 추가
+- 사용자 요청 없이 새 서버·계정·분석 SDK·광역 권한 추가
+- 실패 원인을 해결하지 않고 완료 처리
+
+## 13. 완료 전 최소 검증 게이트
+
+해당 기능이 없으면 구현하지 말고 `해당없음`으로 기록한다.
+
+1. Debug(또는 작업 flavor) build
+2. Release 또는 출시 flavor build (해당 시)
+3. Lint
+4. Unit tests (있으면)
+5. 관련 UI/제한 흐름 확인
+6. 권한과 exported component 검토
+7. Secret 하드코딩 검토
+8. 민감정보 로그 검토
+9. 로컬 DB/백업 마이그레이션 검토
+10. Debug 전용 코드의 출시 빌드 제외 확인
