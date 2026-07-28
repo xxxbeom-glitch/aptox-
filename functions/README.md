@@ -26,6 +26,17 @@ firebase functions:config:set solapi.api_key="YOUR_API_KEY" solapi.api_secret="Y
 
 `solapi.sender_phone`은 Solapi에 등록한 발신번호입니다.
 
+### 4. Gemini API 키 (앱 카테고리 분류 / AI 호출)
+
+모델: **gemini-3.5-flash** (`classifyApps`, `callClaude`)
+
+```bash
+firebase experiments:enable legacyRuntimeConfigCommands
+firebase functions:config:set gemini.api_key="YOUR_GEMINI_API_KEY"
+```
+
+키는 [Google AI Studio](https://aistudio.google.com)에서 발급. 채팅·git에 키를 넣지 마세요.
+
 ## 배포
 
 ```bash

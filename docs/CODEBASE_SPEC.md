@@ -165,8 +165,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| **서비스** | 클라이언트는 **Firebase Callable Functions**만 호출. 서버(`functions/index.js`)에서 **Anthropic Claude** SDK(`@anthropic-ai/sdk`)로 `classifyApps`, `callClaude` 처리. |
-| **API 키** | Functions Config / 환경변수: `functions.config().anthropic` 또는 `ANTHROPIC_API_KEY` (주석·코드 기준). 앱 APK에 Claude 키 직삽입 없음. |
+| **서비스** | 클라이언트는 **Firebase Callable Functions**만 호출. 서버(`functions/index.js`)에서 **Google Gemini** (`gemini-3.5-flash`, `@google/generative-ai`)로 `classifyApps`, `callClaude` 처리. |
+| **API 키** | Functions Config: `gemini.api_key` 또는 환경변수 `GEMINI_API_KEY`. 앱 APK에 키 직삽입 없음. |
 | **기능별 사용** | **classifyApps**: 앱 패키지·이름 목록 → 카테고리 JSON (`AppDataPreloadRepository`, `AddAppScreens`, `AiAppCategoryClassificationScreen`). 옵션 **`debugSimulateFailure`**(기본 false): true면 네트워크 호출 없이 실패 `Result` 반환(디버그 화면). **callClaude**: 범용 프롬프트 → `reply` (`ClaudeRepository.chat`) — **앱 코드 내 다른 화면에서 `chat` 호출은 검색되지 않음**(Repository만 존재). |
 | **프롬프트** | `classifyApps` / `callClaude`는 **서버 `index.js`에 문자열 프롬프트**로 구성. |
 | **로컬 템플릿** | `DailyBriefGenerator.kt` 주석: **Claude 미사용**, 통계 상단 Daily Brief는 로컬 템플릿. |
@@ -202,8 +202,8 @@
 | `verifyAndCompleteSignUp` | 인증 후 Auth 계정 생성 + Firestore user |
 | `sendPasswordResetSms` / `verifyAndResetPassword` | 비번 재설정 SMS 플로우 |
 | `kakaoLogin` / `naverLogin` | 소셜 토큰 → Firestore + Custom Token |
-| `classifyApps` | Claude로 앱 카테고리 분류 |
-| `callClaude` | Claude 단발 프롬프트 |
+| `classifyApps` | Gemini(`gemini-3.5-flash`)로 앱 카테고리 분류 |
+| `callClaude` | Gemini 단발 프롬프트 (Callable 이름 유지) |
 | `submitBugReport` | 버그 신고 Firestore 저장 |
 | `deleteAccount` | `admin.auth().deleteUser(uid)` (Callable 인증 필요) |
 

@@ -2,12 +2,47 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const https = require("https");
 const { SolapiMessageService } = require("solapi");
-const Anthropic = require("@anthropic-ai/sdk").default;
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 admin.initializeApp();
 
 const VERIFICATION_CODES_COLLECTION = "verificationCodes";
 const CODE_EXPIRY_MINUTES = 5;
+
+/** 앱 카테고리 분류·일반 프롬프트에 사용 (무료 티어 Flash) */
+const GEMINI_MODEL = "gemini-3.5-flash";
+
+/**
+ * Gemini API 키.
+ * 설정: firebase experiments:enable legacyRuntimeConfigCommands
+ *       firebase functions:config:set gemini.api_key="..."
+ * 또는 환경변수 GEMINI_API_KEY
+ */
+function getGeminiApiKey() {
+  const config = functions.config().gemini || {};
+  return config.api_key || config.key || process.env.GEMINI_API_KEY || "";
+}
+
+async function generateGeminiText(prompt, { maxOutputTokens = 2048 } = {}) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Gemini API 키가 설정되지 않았습니다. firebase functions:config:set gemini.api_key=..."
+    );
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: GEMINI_MODEL,
+    generationConfig: {
+      maxOutputTokens,
+      temperature: 0.2,
+    },
+  });
+  const result = await model.generateContent(prompt);
+  const text = result?.response?.text?.() ?? "";
+  return String(text).trim();
+}
 
 // Solapi API 키 (config 우선, 없으면 환경변수 또는 기본값)
 // 배포 시: firebase functions:config:set solapi.api_key="..." solapi.api_secret="..." solapi.sender_phone="01012345678"
@@ -474,22 +509,14 @@ function getKakaoUserInfo(accessToken) {
 
 /**
  * 앱 목록 AI 카테고리 분류 - 앱에서 classifyApps({ apps: [{ package, appName }] }) 로 호출
- * API 키: firebase functions:config:set anthropic.key="sk-ant-api03-..."
+ * 모델: gemini-3.5-flash
+ * API 키: firebase functions:config:set gemini.api_key="..."
  * 응답: { results: [{ package, appName, category }] } — category는 SNS/게임/OTT/쇼핑/웹툰/주식·코인/기타 중 하나
  */
 exports.classifyApps = functions.https.onCall(async (data, context) => {
   const apps = data?.apps;
   if (!Array.isArray(apps) || apps.length === 0) {
     throw new functions.https.HttpsError("invalid-argument", "apps 배열이 필요합니다.");
-  }
-
-  const config = functions.config().anthropic || {};
-  const apiKey = config.api_key || config.key || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Anthropic API 키가 설정되지 않았습니다. firebase functions:config:set anthropic.api_key=sk-ant-api03-..."
-    );
   }
 
   const categories = "SNS, 게임, OTT, 쇼핑, 웹툰, 주식·코인, 기타";
@@ -507,15 +534,7 @@ ${appListStr}
 각 category는 반드시 ${categories} 중 정확히 하나만 사용.`;
 
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2048,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const textContent = response.content.find((c) => c.type === "text");
-    const rawText = textContent ? textContent.text.trim() : "";
+    const rawText = await generateGeminiText(prompt, { maxOutputTokens: 2048 });
 
     // JSON 블록 추출 (```json ... ``` 또는 그냥 [...])
     let jsonStr = rawText;
@@ -531,12 +550,18 @@ ${appListStr}
     }));
     return { results };
   } catch (e) {
+    if (e instanceof functions.https.HttpsError) throw e;
     const errMsg = e?.message || String(e);
     console.error("classifyApps error:", errMsg);
-    if (errMsg.includes("invalid_api_key") || errMsg.includes("401")) {
-      throw new functions.https.HttpsError("failed-precondition", "Claude API 키가 유효하지 않습니다.");
+    if (
+      errMsg.includes("API_KEY_INVALID") ||
+      errMsg.includes("api key") ||
+      errMsg.includes("401") ||
+      errMsg.includes("403")
+    ) {
+      throw new functions.https.HttpsError("failed-precondition", "Gemini API 키가 유효하지 않습니다.");
     }
-    if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+    if (errMsg.includes("rate") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED")) {
       throw new functions.https.HttpsError("resource-exhausted", "요청이 너무 많아요. 잠시 후 다시 시도해주세요.");
     }
     throw new functions.https.HttpsError("internal", "앱 분류에 실패했어요. " + errMsg.substring(0, 80));
@@ -544,8 +569,9 @@ ${appListStr}
 });
 
 /**
- * Claude API 호출 - 앱에서 callClaude({ prompt: "..." }) 로 호출
- * API 키 설정: firebase functions:config:set anthropic.api_key="sk-ant-api03-..."
+ * AI 프롬프트 호출 - 앱에서는 기존처럼 callClaude({ prompt }) 로 호출 (이름 유지, 백엔드는 Gemini)
+ * 모델: gemini-3.5-flash
+ * API 키: firebase functions:config:set gemini.api_key="..."
  */
 exports.callClaude = functions.https.onCall(async (data, context) => {
   const prompt = data?.prompt;
@@ -553,40 +579,28 @@ exports.callClaude = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "prompt가 필요합니다.");
   }
 
-  const config = functions.config().anthropic || {};
-  const apiKey = config.api_key || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Anthropic API 키가 설정되지 않았습니다. firebase functions:config:set anthropic.api_key=sk-ant-api03-..."
-    );
-  }
-
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt.trim() }],
-    });
-
-    const textContent = response.content.find((c) => c.type === "text");
-    const reply = textContent ? textContent.text : "";
-
-    return { reply, usage: response.usage };
+    const reply = await generateGeminiText(prompt.trim(), { maxOutputTokens: 1024 });
+    return { reply, usage: null };
   } catch (e) {
+    if (e instanceof functions.https.HttpsError) throw e;
     const errMsg = e?.message || String(e);
-    console.error("callClaude error:", errMsg);
-    if (errMsg.includes("invalid_api_key") || errMsg.includes("401")) {
+    console.error("callClaude(Gemini) error:", errMsg);
+    if (
+      errMsg.includes("API_KEY_INVALID") ||
+      errMsg.includes("api key") ||
+      errMsg.includes("401") ||
+      errMsg.includes("403")
+    ) {
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "Claude API 키가 유효하지 않습니다. console.anthropic.com에서 확인해주세요."
+        "Gemini API 키가 유효하지 않습니다. aistudio.google.com에서 확인해주세요."
       );
     }
-    if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+    if (errMsg.includes("rate") || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED")) {
       throw new functions.https.HttpsError("resource-exhausted", "요청이 너무 많아요. 잠시 후 다시 시도해주세요.");
     }
-    throw new functions.https.HttpsError("internal", "Claude 응답 생성에 실패했어요. " + errMsg.substring(0, 80));
+    throw new functions.https.HttpsError("internal", "AI 응답 생성에 실패했어요. " + errMsg.substring(0, 80));
   }
 });
 
