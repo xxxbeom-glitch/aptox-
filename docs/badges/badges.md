@@ -1,6 +1,6 @@
 # Aptox 뱃지 목록 (최종 확정)
 
-`firestore_seed_badges.json` 기반 18개 뱃지
+`functions/firestore_seed_badges.json` 기반 18개 뱃지
 
 | id | title | description | message |
 |---|---|---|---|
@@ -25,4 +25,4 @@
 
 아이콘: ico_level1 ~ ico_level18 (순서대로 1:1 매핑)
 
-잘못 지급된 뱃지 정리 방법: `badges_cleanup_guide.md` 참고
+잘못 지급된 뱃지 정리 방법: `docs/badges/badges_cleanup_guide.md` 참고

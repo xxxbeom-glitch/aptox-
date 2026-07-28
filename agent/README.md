@@ -23,6 +23,8 @@
 | 디자인/컴포넌트 | `docs/DESIGNSYSTEM.md` |
 | 앱 제한 플로우 | `docs/restriction-flow.md` |
 | 통계 데이터 규칙 | `docs/statistics-data-rules.md` |
+| 뱃지 목록·정리 | `docs/badges/` |
+| 알림 텍스트 현황 | `docs/notification-texts.md` |
 | Figma·헤더·버튼 수치 | `agent/design/rules.md` (요약: `.cursorrules`) |
 | 디자인 문서 읽는 순서 | `agent/design/README.md` |
 | Compose 구조·상태·접근성 | `.cursor/rules/10-android-compose-ui.mdc` |

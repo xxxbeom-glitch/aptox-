@@ -30,12 +30,12 @@ async function main() {
   }
   const db = admin.firestore();
 
-  const jsonPath = path.join(__dirname, '..', 'firestore_seed_badges.json');
+  const jsonPath = path.join(__dirname, 'firestore_seed_badges.json');
   const raw = fs.readFileSync(jsonPath, 'utf8');
   const data = JSON.parse(raw);
 
   if (!data.badges) {
-    console.error('firestore_seed_badges.json에 badges 키가 없습니다.');
+    console.error('functions/firestore_seed_badges.json에 badges 키가 없습니다.');
     process.exit(1);
   }
 

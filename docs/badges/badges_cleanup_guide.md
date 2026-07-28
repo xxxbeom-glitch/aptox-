@@ -11,7 +11,7 @@ cd functions
 npm run seed-badges -- ./cole-c3f96-firebase-adminsdk-fbsvc-3dd45b92b2.json
 ```
 
-- `badges` 컬렉션의 문서(id, title, condition 등)가 `firestore_seed_badges.json`으로 **전체 교체**됩니다.
+- `badges` 컬렉션의 문서(id, title, condition 등)가 `functions/firestore_seed_badges.json`으로 **전체 교체**됩니다.
 - `users/{userId}/badges/` 하위 문서(사용자별 획득 뱃지)는 **변경되지 않습니다**.
 
 ## 2. 잘못 지급된 사용자별 뱃지 삭제
