@@ -237,8 +237,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **Gradle 태스크** | 루트 `build.gradle.kts`: `aptox` → `:app:bundleDevRelease`; `aptoxDebug` → `:app:assembleDevDebug`; `aptoxTest` → `:app:assembleExternalTestDebug` + APK 복사 |
-| **Play 번들(AAB) 산출** | `app/build/outputs/bundle/<변형>/` 예: 스토어·내부 테스트용 `externalTestRelease` → `app-externalTest-release.aab` (`.\gradlew.bat bundleExternalTestRelease`) |
+| **Gradle 태스크** | 루트: `aptoxDebug`→devDebug APK, `aptoxTest`→externalTestDebug APK, `aptox`→devRelease AAB, `aptoxPlay`→externalTestRelease AAB. 산출 **복사본**은 루트 `dist/` (`dist/README.md`) |
+| **Play 번들(AAB) 산출** | 원본은 `app/build/outputs/bundle/<변형>/` (AGP 고정). 찾기 쉬운 복사본: `dist/aptox-*-release.aab` |
+| **설치 APK 산출** | 원본은 `app/build/outputs/apk/...`. 복사본: `dist/aptox-dev-debug.apk`, `dist/aptox-test-1.0.apk` |
 | **설치 충돌 보조** | `:app:uninstallAptoxForDevInstall` — 연결 기기에서 `adb uninstall com.aptox.app` (다른 서명 APK가 깔린 뒤 `installDevDebug`가 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` 날 때) |
 | **릴리즈 서명** | `app/build.gradle.kts` `signingConfigs.release` — 경로·비밀번호는 **`gradle.properties`의 `APTOX_KEYSTORE_PATH`, `APTOX_KEYSTORE_PASSWORD`, `APTOX_KEY_ALIAS`, `APTOX_KEY_PASSWORD`** (민감 정보는 버전 관리 제외 권장) |
 | **이슈 브릿지** | `.cursor/rules/issue-bridge.mdc`, `issue-bridge.ps1` — PowerShell로 이슈 기록 자동화 |

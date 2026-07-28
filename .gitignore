@@ -33,6 +33,10 @@ aptox-release.jks
 /SPEC.md
 /AppMonitorService_backup.java
 
+# Build artifacts (copied for convenience; originals stay under app/build/outputs/)
+/dist/*.apk
+/dist/*.aab
+
 # Firebase Functions
 functions/node_modules
 functions/*-adminsdk-*.json
