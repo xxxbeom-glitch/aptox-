@@ -4,37 +4,38 @@
 
 ## Task
 
-- Task ID: HARNESS-002
+- Task ID: HARNESS-003
 - Screen ID: N/A
-- Area: `.cursor/rules/10-android-compose-ui.mdc`
+- Area: agent/design + .cursorrules
 
 ## Goal
 
-Aptox용 Compose UI 규칙 축소판을 추가한다. Figma 수치 규칙은 기존 `.cursorrules`를 유지한다.
+`.cursorrules`의 헤더·버튼·Figma 세부 규칙을 `agent/design/rules.md`로 옮기고, `.cursorrules`는 운영 요약만 남긴다.
 
 ## Required
 
-- `10-android-compose-ui.mdc` 추가 (구조·상태·접근성·리소스)
-- Liftly식 절대좌표 금지 / Debug Catalog 강제 / 토큰만 사용은 제외
-- `PROJECT_SPEC`·`agent/README`에 규칙 위치 반영
+- `agent/design/README.md`, `agent/design/rules.md` 추가
+- `.cursorrules` 슬림화 + 링크
+- core / Compose 규칙 / agent README·PROJECT_SPEC 경로 갱신
 
 ## Allowed Scope
 
-- 위 규칙·agent 문서만
+- 위 문서·규칙만
 
 ## Forbidden
 
-- `app/` 소스 변경, 패키지 이동
-- `.cursorrules` 삭제·수치 규칙 약화
+- `app/` 소스 변경
+- 디자인 규칙 내용 약화·삭제
 
 ## Verification
 
-- [x] 규칙 파일 존재·역할 분리 확인
-- [ ] Compile/Build (해당 없음 — 코드 미변경)
+- [x] 헤더·버튼 규칙이 `agent/design/rules.md`에 존재
+- [x] `.cursorrules`가 해당 문서를 가리킴
+- [ ] Build (해당 없음)
 
 ## Done When
 
-- Compose 작업 시 적용될 aptox용 `10-...` 규칙이 있고, Figma fidelity와 충돌하지 않음
+- UI 세부 규칙 위치가 `agent/design/`으로 정리되고 기존 수치 약속이 유지됨
 
 ## Result
 

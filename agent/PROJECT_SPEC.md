@@ -46,7 +46,8 @@
 
 ## Design & UI contracts
 
-- Figma 수치·헤더·버튼 규칙은 루트 `.cursorrules`가 우선한다
+- Figma 수치·헤더·버튼 규칙은 `agent/design/rules.md`가 담당한다 (요약·수정 범위는 루트 `.cursorrules`)
+- 디자인 문서 읽는 순서는 `agent/design/README.md`
 - 디자인 시스템·컴포넌트 메모는 `docs/DESIGNSYSTEM.md`
 - Liftly식 “절대좌표 금지 / 토큰만” 규칙을 이 프로젝트에 강제하지 않는다
 

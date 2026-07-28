@@ -23,7 +23,8 @@
 | 디자인/컴포넌트 | `docs/DESIGNSYSTEM.md` |
 | 앱 제한 플로우 | `docs/restriction-flow.md` |
 | 통계 데이터 규칙 | `docs/statistics-data-rules.md` |
-| Figma·헤더·버튼 수치 | 루트 `.cursorrules` |
+| Figma·헤더·버튼 수치 | `agent/design/rules.md` (요약: `.cursorrules`) |
+| 디자인 문서 읽는 순서 | `agent/design/README.md` |
 | Compose 구조·상태·접근성 | `.cursor/rules/10-android-compose-ui.mdc` |
 
 ---
@@ -33,4 +34,4 @@
 - **큰 약속·범위** → `PROJECT_SPEC`
 - **이번 일만** → `TASK_CONTRACT`
 - **이어서** → `SESSION_HANDOFF`
-- **화면/디자인 세부** → `docs/` + `.cursorrules`
+- **화면/디자인 세부** → `agent/design/rules.md` + `docs/`

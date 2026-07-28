@@ -4,13 +4,15 @@
 
 ## Current Task
 
-- Task ID: HARNESS-002
+- Task ID: HARNESS-003
 - Status: COMPLETED
 
 ## Completed
 
-- `.cursor/rules/10-android-compose-ui.mdc` 추가 (Figma 수치는 `.cursorrules` 우선)
-- `agent/PROJECT_SPEC.md`, `agent/README.md`에 규칙 링크 반영
+- `agent/design/rules.md`에 Figma·헤더·버튼 규칙 이전
+- `agent/design/README.md` 추가
+- `.cursorrules` 슬림화 (운영·커밋 + design 링크)
+- core / 10-compose / agent README·PROJECT_SPEC 경로 갱신
 
 ## Last Successful Verification
 
@@ -26,12 +28,12 @@
 
 ## Next Action
 
-- (선택) `.cursorrules` 헤더/버튼 절을 `agent/design/rules.md`로 옮기기
-- (선택) PROJECT_SPEC에 손대면 안 되는 서비스/권한 체크리스트 구체화
+- (선택) PROJECT_SPEC 위험 구역 체크리스트 구체화
+- (선택) Debug 화면 등록/Release 제외 규칙만 보강
 - 실제 앱 작업 시 TASK_CONTRACT 교체
 
 ## Resume Command
 
 ```text
-agent/README.md 보고 이어서. Compose는 10- 규칙 + .cursorrules 수치. 패키지 대이동 금지.
+agent/design/README.md 보고 이어서. UI 수치는 agent/design/rules.md. 패키지 대이동 금지.
 ```

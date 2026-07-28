@@ -6,13 +6,14 @@ alwaysApply: true
 # Project Core Rules
 
 이 파일은 모든 작업에서 항상 적용되는 최소 운영 규칙이다.
-Figma 수치·헤더·버튼 세부는 루트 `.cursorrules`가 담당한다. 이슈 ZIP은 `.cursor/rules/issue-bridge.mdc`가 담당한다.
+Figma 수치·헤더·버튼 세부는 `agent/design/rules.md`가 담당한다 (요약·수정 범위는 루트 `.cursorrules`).
+이슈 ZIP은 `.cursor/rules/issue-bridge.mdc`가 담당한다.
 
 ## 1. 작업 시작
 
 - 사용자의 최신 요청을 기준으로 목표와 범위를 확인한다.
 - 코드·화면·아키텍처를 바꾸는 구현 작업이면 `agent/TASK_CONTRACT.md`를 읽고, 비어 있거나 이전 작업이면 이번 내용으로 짧게 채운다.
-- UI·플로우·디자인 관련이면 루트 `.cursorrules`, Compose면 `.cursor/rules/10-android-compose-ui.mdc`, 필요 시 `docs/`(DESIGNSYSTEM, restriction-flow 등)를 확인한다.
+- UI·플로우·디자인 관련이면 `.cursorrules` → `agent/design/rules.md` → 필요 시 `docs/`, Compose면 `10-android-compose-ui.mdc`를 확인한다.
 - 질문·설명·탐색만 하는 요청에는 `TASK_CONTRACT.md` 갱신을 요구하지 않는다.
 - 관련 코드와 문서를 읽기 전에는 구현 방향을 확정하지 않는다.
 - 정보가 부족하더라도 임의의 기능이나 요구사항을 만들어 넣지 않는다.
@@ -34,11 +35,12 @@ Figma 수치·헤더·버튼 세부는 루트 `.cursorrules`가 담당한다. �
 
 1. 사용자의 최신 요청과 `Done When`
 2. 필수 기능, 데이터 무결성, 권한·보안, 접근성
-3. 루트 `.cursorrules` (Figma 수치·헤더·버튼)
-4. `.cursor/rules/10-android-compose-ui.mdc` (Compose 구조·상태; 수치 충돌 시 3이 우선)
-5. `agent/PROJECT_SPEC.md`와 `docs/`의 확정된 플로우·데이터 규칙
-6. 프로젝트에서 이미 쓰는 구조와 패턴
-7. 최소 구현과 유지보수성
+3. 루트 `.cursorrules` (수정 범위·확인·Figma 수치 요약)
+4. `agent/design/rules.md` (헤더·버튼·레이아웃 세부)
+5. `.cursor/rules/10-android-compose-ui.mdc` (Compose 구조·상태; 수치 충돌 시 3·4가 우선)
+6. `agent/PROJECT_SPEC.md`와 `docs/`의 확정된 플로우·데이터 규칙
+7. 프로젝트에서 이미 쓰는 구조와 패턴
+8. 최소 구현과 유지보수성
 
 ## 4. 완료 보고
 

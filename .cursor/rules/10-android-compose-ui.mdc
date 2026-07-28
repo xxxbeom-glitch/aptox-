@@ -12,13 +12,13 @@ globs:
 Compose UI를 구현하거나 수정할 때 적용한다.
 Views/XML 위젯만 만지는 작업에는 Preview·상태 완료 조건을 강제하지 않는다.
 
-Figma 수치·헤더·버튼 세부는 루트 `.cursorrules`가 **우선**한다.
+Figma 수치·헤더·버튼 세부는 `agent/design/rules.md`가 **우선**한다 (요약은 루트 `.cursorrules`).
 이 파일은 구조·상태·접근성·리소스 규칙만 다룬다. Liftly식 “절대좌표 금지 / 토큰만 사용”을 강제하지 않는다.
 
 ## 1. Figma와 수치
 
-- UI 구현 전 루트 `.cursorrules`를 확인한다. 피그마 수치·텍스트 크기·간격을 임의로 바꾸지 않는다.
-- 앱 제한 플로우 헤더·하단 버튼 배치는 `.cursorrules`의 해당 절을 따른다.
+- UI 구현 전 `agent/design/rules.md`와 루트 `.cursorrules`를 확인한다. 피그마 수치·텍스트 크기·간격을 임의로 바꾸지 않는다.
+- 앱 제한 플로우 헤더·하단 버튼 배치는 `agent/design/rules.md`의 해당 절을 따른다.
 - 컴포넌트·색·타이포 참고는 `docs/DESIGNSYSTEM.md`를 본다.
 - 디자인과 Android 플랫폼 관례(시스템 inset, 터치 영역, 폰트 스케일)가 충돌하면 사용성을 해치지 않는 선에서 맞추고, Figma와 달라진 점을 보고한다.
 - Material 3 기본값이나 Dynamic Color를 확인 없이 덮어쓰지 않는다.
@@ -81,6 +81,6 @@ Figma 수치·헤더·버튼 세부는 루트 `.cursorrules`가 **우선**한다
 ## 9. 구현 완료 조건 (Compose 화면 작업)
 
 - 요구된 기본 상태가 구현됨
-- Figma/`.cursorrules` 수치를 임의로 바꾸지 않음. 불가피한 차이는 보고됨
+- Figma/`agent/design/rules.md` 수치를 임의로 바꾸지 않음. 불가피한 차이는 보고됨
 - 핵심 레이아웃이 inset·작은 화면에서 치명적으로 깨지지 않음
 - 프로젝트 검증을 실행했거나 `NOT VERIFIED` 사유가 기록됨
