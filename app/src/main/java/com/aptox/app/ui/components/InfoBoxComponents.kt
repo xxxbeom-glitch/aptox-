@@ -1,4 +1,4 @@
-package com.aptox.app
+package com.aptox.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,16 +16,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aptox.app.AppColors
+import com.aptox.app.AppTypography
 
 private val CompactBoxPaddingHorizontal = 12.dp
 private val CompactBoxPaddingVertical = 8.dp
 private val CompactBoxCornerRadius = 6.dp
-// 패딩(8*2) + Caption1 lineHeight(19sp) ≈ 35dp
+// ?�딩(8*2) + Caption1 lineHeight(19sp) ??35dp
 private val CompactBoxMinHeight = 35.dp
 
 /**
  * Figma 901-3501: InfoBox Compact
- * 패딩 horizontal=12dp(가변), vertical=8dp, minHeight=35dp, rounded 6dp
+ * ?�딩 horizontal=12dp(가변), vertical=8dp, minHeight=35dp, rounded 6dp
  */
 @Composable
 fun AptoxInfoBoxCompact(
@@ -55,11 +57,11 @@ fun AptoxInfoBoxCompact(
 }
 
 /**
- * AptoxInfoBoxCompact 신규 디자인
- * - border 제거
+ * AptoxInfoBoxCompact ?�규 ?�자??
+ * - border ?�거
  * - 배경: Primary50
- * - 텍스트: Primary400
- * - 기본 패딩: 상하 18dp, 좌우 16dp
+ * - ?�스?? Primary400
+ * - 기본 ?�딩: ?�하 18dp, 좌우 16dp
  */
 @Composable
 fun AptoxInfoBoxCompactNewDesign(
@@ -88,8 +90,8 @@ fun AptoxInfoBoxCompactNewDesign(
 }
 
 /**
- * Figma: InfoBox / Notice 안내 박스
- * SurfaceBackgroundInfoBox, BorderInfoBox 사용
+ * Figma: InfoBox / Notice ?�내 박스
+ * SurfaceBackgroundInfoBox, BorderInfoBox ?�용
  */
 @Composable
 fun AptoxInfoBox(

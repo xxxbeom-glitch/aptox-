@@ -1,4 +1,6 @@
 package com.aptox.app
+import com.aptox.app.ui.components.AptoxGhostButton
+import com.aptox.app.ui.components.AptoxOutlinedTextButton
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

@@ -1,4 +1,5 @@
 package com.aptox.app
+import com.aptox.app.ui.components.AptoxGhostButton
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing

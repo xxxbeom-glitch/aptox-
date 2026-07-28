@@ -1,4 +1,7 @@
 package com.aptox.app
+import com.aptox.app.ui.components.AptoxInfoBoxCompactNewDesign
+import com.aptox.app.ui.components.AptoxPrimaryButton
+import com.aptox.app.ui.components.CategoryTag
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween

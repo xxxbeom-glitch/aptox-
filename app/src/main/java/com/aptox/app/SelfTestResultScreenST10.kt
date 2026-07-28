@@ -1,4 +1,5 @@
 package com.aptox.app
+import com.aptox.app.ui.components.AptoxTwoLineButton
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement

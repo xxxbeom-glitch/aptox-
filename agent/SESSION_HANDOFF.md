@@ -1,36 +1,26 @@
 # Session Handoff
 
-다음 세션에서 바로 이어가기 위해 현재 상태만 짧게 기록한다. 과거 이력 전체를 복사하지 않는다.
+다음 세션에서 바로 이어가기 위해 현재 상태만 짧게 기록한다.
 
 ## Current Task
 
-- Task ID: HARNESS-004
+- Task ID: UI-COMP-001
 - Status: COMPLETED
 
 ## Completed
 
-- `agent/PROJECT_SPEC.md`에 위험 구역 체크리스트·금지 항목·작업 전 질문 추가
-
-## Last Successful Verification
-
-- 문서만 작성 (앱 빌드 미실행)
-
-## Open Blockers
-
-- 없음
-
-## Files In Progress
-
-- 없음
+- Form/InfoBox/CategoryTag/Button → `com.aptox.app.ui.components`
+- CategoryTag 색 → `AppColors.CategoryTag*`
+- 호출부 import 추가, `compileDevDebugKotlin` PASS
 
 ## Next Action
 
-- (선택) Debug 화면 등록/Release 제외 규칙만 보강
-- 실제 앱 작업 시 TASK_CONTRACT 교체
-- 위험 구역 수정 시 production-readiness skill 실행
+- (선택) SpeechBubble/Progress 등 나머지 순수 컴포넌트 이전
+- (선택) IconComponents Path → vector 에셋화
+- 시스템·StubScreens 제한 로직은 건드리지 않음
 
 ## Resume Command
 
 ```text
-agent/PROJECT_SPEC.md 위험 구역 표 보고 이어서. 해당 구역 수정 시 review-production-readiness 실행.
+ui/components에 Form·InfoBox·CategoryTag·Button 있음. 다음엔 SpeechBubble/아이콘 에셋화. 모니터·접근성·제한 코어 금지.
 ```

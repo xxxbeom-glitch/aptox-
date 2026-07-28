@@ -1,4 +1,5 @@
 package com.aptox.app
+import com.aptox.app.ui.components.CategoryTag
 
 import android.app.usage.UsageStatsManager
 import android.content.Context

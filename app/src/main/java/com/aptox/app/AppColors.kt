@@ -177,4 +177,17 @@ object AppColors {
     val ButtonPrimaryBgDefault = Primary300
     val ButtonPrimaryBgPressed = Primary400
     val ButtonPrimaryBgDisabled = Grey250
+
+    // Category tags (Figma 948-3543 / DESIGNSYSTEM.md)
+    val CategoryTagOttBg = Color(0xFFEBCFFF)
+    val CategoryTagOttText = Color(0xFF55366B)
+    val CategoryTagSnsBg = Color(0xFFFFC34B)
+    val CategoryTagSnsText = Color(0xFF553C0A)
+    val CategoryTagGameBg = Color(0xFF818CFF)
+    val CategoryTagShoppingBg = Color(0xFFA2A2A2)
+    val CategoryTagWebtoonBg = Color(0xFF88C9FF)
+    val CategoryTagStockBg = Color(0xFF3D9E5D)
+    val CategoryTagOtherBg = Color(0xFFBDBDBD)
+    val CategoryTagOtherText = Color(0xFF424242)
+    val CategoryTagOnColorText = White900
 }

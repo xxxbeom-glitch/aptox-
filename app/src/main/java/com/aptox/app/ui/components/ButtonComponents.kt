@@ -1,4 +1,4 @@
-package com.aptox.app
+package com.aptox.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.aptox.app.AppColors
+import com.aptox.app.AppTypography
 
 @Composable
 fun AptoxPrimaryButton(
@@ -83,7 +85,7 @@ fun AptoxTwoLineButton(
     enabled: Boolean = true,
     ghostEnabled: Boolean = enabled,
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
-    /** true면 상단 버튼을 삭제 등 경고색으로 표시 */
+    /** true�??�단 버튼????�� ??경고?�으�??�시 */
     primaryDestructive: Boolean = false,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -159,8 +161,8 @@ fun AptoxAddAppButton(
 }
 
 /**
- * 나의 스마트폰 중독 지수 카드용 아웃라인 버튼 (Figma 619-2806)
- * border 1dp, 배경 흰색, 60dp 높이, 12dp 라운드
+ * ?�의 ?�마?�폰 중독 지??카드???�웃?�인 버튼 (Figma 619-2806)
+ * border 1dp, 배경 ?�색, 60dp ?�이, 12dp ?�운??
  */
 @Composable
 fun AptoxOutlinedTextButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
@@ -181,7 +183,7 @@ fun AptoxOutlinedTextButton(text: String, onClick: () -> Unit, modifier: Modifie
     }
 }
 
-/** 1라인, 배경 없는 텍스트 버튼 (기기 권한 안내 하단 등) */
+/** 1?�인, 배경 ?�는 ?�스??버튼 (기기 권한 ?�내 ?�단 ?? */
 @Composable
 fun AptoxTextOnlyButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     Button(

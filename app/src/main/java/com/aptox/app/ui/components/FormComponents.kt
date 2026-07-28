@@ -1,4 +1,4 @@
-package com.aptox.app
+package com.aptox.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.aptox.app.AppColors
+import com.aptox.app.AppTypography
+import com.aptox.app.IcoErrorInfo
 
 enum class TextFieldState { Default, Disabled, Error, Focus }
 
