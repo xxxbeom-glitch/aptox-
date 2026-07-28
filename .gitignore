@@ -24,6 +24,13 @@ aptox-release.jks
 # Accidental root Node deps (no package.json at repo root)
 /node_modules/
 
+# Issue bridge temps at repo root (archives live under issues/)
+/issue.md
+/issue-bridge-input.md
+
+# One-off source backups dumped at repo root
+/AppMonitorService_backup.java
+
 # Firebase Functions
 functions/node_modules
 functions/*-adminsdk-*.json
