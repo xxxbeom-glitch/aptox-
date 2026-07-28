@@ -58,12 +58,13 @@
 | `SESSION_HANDOFF.md` | 세션 인수인계 |
 | `ERROR_LEDGER.md` | 반복 오류 |
 | `.cursor/rules/00-project-core.mdc` | 항상 적용되는 최소 운영 |
+| `.cursor/rules/10-android-compose-ui.mdc` | Compose 구조·상태·접근성 (Figma 수치는 `.cursorrules` 우선) |
 | `.cursor/rules/20-quality-and-recovery.mdc` | 빌드·검증·복구 |
 | `.cursor/rules/30-production-engineering.mdc` | 권한·데이터·릴리즈 안전 |
 
-## Out of scope for harness phase
+## Out of scope (아직 하지 않음)
 
 - 코드 패키지 재배치
 - Debug Catalog를 `src/debug`로 일괄 이전
-- Compose UI 규칙 파일(`10-...`) 도입
 - 기존 `.cursorrules` / `docs/` / issue-bridge 삭제
+- Liftly식 “절대좌표 금지 / 토큰만” 강제

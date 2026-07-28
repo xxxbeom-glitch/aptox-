@@ -24,6 +24,7 @@
 | 앱 제한 플로우 | `docs/restriction-flow.md` |
 | 통계 데이터 규칙 | `docs/statistics-data-rules.md` |
 | Figma·헤더·버튼 수치 | 루트 `.cursorrules` |
+| Compose 구조·상태·접근성 | `.cursor/rules/10-android-compose-ui.mdc` |
 
 ---
 

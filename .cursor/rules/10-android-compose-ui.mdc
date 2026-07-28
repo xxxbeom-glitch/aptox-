@@ -1,0 +1,86 @@
+---
+description: Jetpack Compose UI rules for Aptox (Figma fidelity preserved)
+alwaysApply: false
+globs:
+  - "**/*.kt"
+  - "**/src/main/res/**"
+  - "**/src/debug/**"
+---
+
+# Android Compose UI Rules
+
+Compose UI를 구현하거나 수정할 때 적용한다.
+Views/XML 위젯만 만지는 작업에는 Preview·상태 완료 조건을 강제하지 않는다.
+
+Figma 수치·헤더·버튼 세부는 루트 `.cursorrules`가 **우선**한다.
+이 파일은 구조·상태·접근성·리소스 규칙만 다룬다. Liftly식 “절대좌표 금지 / 토큰만 사용”을 강제하지 않는다.
+
+## 1. Figma와 수치
+
+- UI 구현 전 루트 `.cursorrules`를 확인한다. 피그마 수치·텍스트 크기·간격을 임의로 바꾸지 않는다.
+- 앱 제한 플로우 헤더·하단 버튼 배치는 `.cursorrules`의 해당 절을 따른다.
+- 컴포넌트·색·타이포 참고는 `docs/DESIGNSYSTEM.md`를 본다.
+- 디자인과 Android 플랫폼 관례(시스템 inset, 터치 영역, 폰트 스케일)가 충돌하면 사용성을 해치지 않는 선에서 맞추고, Figma와 달라진 점을 보고한다.
+- Material 3 기본값이나 Dynamic Color를 확인 없이 덮어쓰지 않는다.
+
+## 2. 적응형 레이아웃
+
+- 화면 너비를 한 기기에만 고정하지 않는다. `dp`, `sp`, `WindowInsets`를 사용한다.
+- Figma 수치를 지키되, 작은 화면·큰 글씨에서 잘림·겹침·터치 불가가 생기지 않게 한다.
+- 앱 제한 플로우 등 공통 레이아웃은 기존 `windowInsetsPadding` + 헤더 패딩 패턴을 재사용한다.
+
+## 3. 화면 구조 (새 코드·의미 있는 수정 시)
+
+기존 파일이 ViewModel·Repository를 Composable에 섞어 두었어도 **일괄 분리하지 않는다**.
+새로 만들거나, 요청 범위 안에서 손대는 화면에만 아래를 적용한다.
+
+- UI는 가능한 한 `Screen(uiState, onAction)` 형태로 두고, Navigation·데이터 수집은 Route/상위 또는 ViewModel에 둔다.
+- Composable 내부에 네트워크·DB·파일 저장을 **새로** 직접 넣지 않는다.
+- 화면에 필요한 상태는 명시적인 `UiState`(또는 동등한 상태 모델)로 표현한다.
+- 보안·권한·저장·릴리즈는 `30-production-engineering.mdc`를 따른다.
+
+## 4. 화면 상태
+
+화면 성격에 따라 실제로 발생 가능한 상태만 검토한다.
+
+- Loading
+- Content
+- Empty
+- Error
+- Disabled
+- Permission Required / Offline (해당 시)
+
+모든 상태를 무조건 만들지 않는다.
+
+## 5. 디자인 재사용
+
+- 같은 역할의 색·타이포·간격·컴포넌트를 화면마다 새로 하드코딩해 흩뿌리지 않는다. 프로젝트에 이미 있는 테마·컴포넌트·`docs/DESIGNSYSTEM.md`를 우선한다.
+- 한 화면에서만 쓰는 값까지 성급하게 전역 토큰으로 승격하지 않는다.
+- Figma에 명시된 값은 `.cursorrules`에 따라 그대로 맞춘다.
+
+## 6. 리소스
+
+- 사용자에게 보이는 문자열은 원칙적으로 `strings.xml`에서 관리한다.
+- 아이콘은 프로젝트 Vector Drawable 또는 기존 아이콘 컴포넌트를 우선 사용한다.
+- 리소스 이름은 소문자 snake_case로 명확하게 작성한다.
+
+## 7. 접근성
+
+- 주요 터치 영역은 가능한 한 최소 48dp를 확보한다. Figma가 더 작으면 터치 영역만 확대하고 시각 크기는 디자인에 맞춘다.
+- 의미 있는 이미지·아이콘에는 contentDescription 또는 semantics를 제공한다.
+- 색상만으로 선택·오류·성공을 전달하지 않는다.
+- 읽기 순서·포커스가 시각 순서와 맞도록 한다.
+
+## 8. Preview와 Debug
+
+- 새 주요 화면에는 대표 상태를 볼 수 있는 Compose Preview를 두는 것을 권장한다.
+- 이미 있는 `Debug*Screen` / Debug 메뉴 패턴을 따를 수 있으면 따른다.
+- Debug Catalog를 `src/debug`로 일괄 이전하거나, Liftly식 Catalog 완료 조건을 **강제하지 않는다**.
+- Debug 전용 UI가 Release/`externalTest` 정책(`SHOW_DEBUG_MENU` 등)을 깨지 않게 한다.
+
+## 9. 구현 완료 조건 (Compose 화면 작업)
+
+- 요구된 기본 상태가 구현됨
+- Figma/`.cursorrules` 수치를 임의로 바꾸지 않음. 불가피한 차이는 보고됨
+- 핵심 레이아웃이 inset·작은 화면에서 치명적으로 깨지지 않음
+- 프로젝트 검증을 실행했거나 `NOT VERIFIED` 사유가 기록됨

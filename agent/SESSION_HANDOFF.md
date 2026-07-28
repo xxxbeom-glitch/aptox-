@@ -4,19 +4,17 @@
 
 ## Current Task
 
-- Task ID: HARNESS-001
+- Task ID: HARNESS-002
 - Status: COMPLETED
 
 ## Completed
 
-- `agent/` 골격 추가 (README, PROJECT_SPEC, TASK_CONTRACT, SESSION_HANDOFF, ERROR_LEDGER)
-- `.cursor/rules/00-project-core.mdc`, `20-quality-and-recovery.mdc`, `30-production-engineering.mdc` 추가
-- `.cursor/skills/diagnose-and-recover`, `review-production-readiness` 추가
-- 기존 `.cursorrules`, `docs/`, issue-bridge 유지
+- `.cursor/rules/10-android-compose-ui.mdc` 추가 (Figma 수치는 `.cursorrules` 우선)
+- `agent/PROJECT_SPEC.md`, `agent/README.md`에 규칙 링크 반영
 
 ## Last Successful Verification
 
-- 문서만 작성 (앱 빌드 미실행 — 코드 미변경)
+- 문서만 작성 (앱 빌드 미실행)
 
 ## Open Blockers
 
@@ -28,11 +26,12 @@
 
 ## Next Action
 
-- 실제 앱 작업 시작 시 `TASK_CONTRACT.md`를 해당 작업으로 교체
-- Compose UI 규칙(`10-...`)·Debug Catalog·패키지 정리는 별도 승인 후
+- (선택) `.cursorrules` 헤더/버튼 절을 `agent/design/rules.md`로 옮기기
+- (선택) PROJECT_SPEC에 손대면 안 되는 서비스/권한 체크리스트 구체화
+- 실제 앱 작업 시 TASK_CONTRACT 교체
 
 ## Resume Command
 
 ```text
-agent/README.md 와 PROJECT_SPEC.md 보고 이어서. 하네스는 문서만 적용됨. 앱 코드 대이동은 하지 말 것.
+agent/README.md 보고 이어서. Compose는 10- 규칙 + .cursorrules 수치. 패키지 대이동 금지.
 ```
