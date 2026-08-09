@@ -172,19 +172,39 @@ class AuthRepository(
      * @param forReauth true면 이미 앱에 연동된 계정만 먼저 시도한 뒤, 없으면 전체 계정 선택 UI로 fallback
      */
     private suspend fun requestGoogleIdToken(context: Context, forReauth: Boolean): String {
-        val credentialManager = CredentialManager.create(context)
+        val activity = context.findActivity()
+            ?: throw IllegalStateException("구글 로그인을 표시할 화면을 찾지 못했어요.")
+        val credentialManager = CredentialManager.create(activity)
 
         suspend fun getWith(option: androidx.credentials.CredentialOption): String {
             val request = GetCredentialRequest.Builder()
                 .addCredentialOption(option)
                 .build()
             val response = try {
-                credentialManager.getCredential(context = context, request = request)
+                credentialManager.getCredential(context = activity, request = request)
             } catch (e: GetCredentialCancellationException) {
+                val detail = e.message.orEmpty()
+                Log.e(TAG, "GetCredentialCancellationException: $detail", e)
+                // 계정 선택 직후 "activity is cancelled by the user"는 SHA/OAuth 미등록인 경우가 많음
+                val looksLikeConfig =
+                    detail.contains("activity is cancelled", ignoreCase = true) ||
+                        detail.contains("canceled by the user", ignoreCase = true) ||
+                        detail.contains("cancelled by the user", ignoreCase = true)
+                if (looksLikeConfig) {
+                    throw IllegalStateException(
+                        "구글 로그인 인증에 실패했어요. Firebase에 이 PC debug SHA-1이 등록됐는지 확인해 주세요.",
+                        e,
+                    )
+                }
                 throw IllegalStateException(
                     if (forReauth) "구글 재인증이 취소되었습니다." else "구글 로그인이 취소되었습니다.",
                     e,
                 )
+            } catch (e: NoCredentialException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "getCredential 실패: ${e.javaClass.simpleName} ${e.message}", e)
+                throw e
             }
             return GoogleIdTokenCredential.createFrom(response.credential.data).idToken
         }
