@@ -15,6 +15,12 @@ object SubscriptionManager {
      */
     const val PREMIUM_OFFERING_LIVE: Boolean = true
 
+    /**
+     * true면 결제/DataStore와 무관하게 프리미엄 기능 제한을 전부 해제.
+     * (앱 개수·드럼롤·통계·백업 등 [SubscriptionFeature] 게이트)
+     */
+    const val UNLOCK_ALL_FEATURES: Boolean = true
+
     // 디버그 강제 설정 (개발/테스트용) — true면 항상 구독으로 간주
     var debugForceSubscribed: Boolean = false
 
@@ -30,6 +36,7 @@ object SubscriptionManager {
      * Compose 등에서 DataStore 플로우 값과 동일한 규칙으로 구독 여부를 계산할 때 사용.
      */
     fun isSubscribedWithStore(storePremium: Boolean, context: Context): Boolean {
+        if (UNLOCK_ALL_FEATURES) return true
         if (!PREMIUM_OFFERING_LIVE) {
             if (BuildConfig.DEBUG && debugForceSubscribed) return true
             return false
