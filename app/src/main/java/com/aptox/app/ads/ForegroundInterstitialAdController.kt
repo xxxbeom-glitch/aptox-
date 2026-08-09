@@ -13,7 +13,6 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.aptox.app.BuildConfig
 import com.aptox.app.MainActivity
 import com.aptox.app.subscription.PremiumStatusRepository
-import com.aptox.app.subscription.SubscriptionManager
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -125,8 +124,9 @@ object ForegroundInterstitialAdController {
         )
     }
 
-    private fun shouldSuppressAds(context: Context): Boolean =
-        SubscriptionManager.isSubscribed(context)
+    /** 일시 비표시: 전면 AdMob OFF (배너/프리미엄 유도도 SubscriptionFeature에서 OFF) */
+    @Suppress("UnusedParameter")
+    private fun shouldSuppressAds(context: Context): Boolean = true
 
     private fun requestLoadIfNeeded() {
         val ctx = appContext ?: return
