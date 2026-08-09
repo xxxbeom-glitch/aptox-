@@ -105,10 +105,12 @@ object SubscriptionFeature {
     fun canUseWidget(context: Context): Boolean = true
 
     // ── AdMob 홈 배너 ──────────────────────
-    fun shouldShowHomeBannerAd(context: Context): Boolean =
-        !SubscriptionManager.isSubscribed(context)
+    // 일시 비표시: 홈 하단 배너 광고 OFF
+    @Suppress("UnusedParameter")
+    fun shouldShowHomeBannerAd(context: Context): Boolean = false
 
     // ── 하단 구독 유도 배너(내비 하단) ─────
-    fun shouldShowPremiumUpsellNavBanner(context: Context): Boolean =
-        !SubscriptionManager.isSubscribed(context)
+    // 일시 비표시: 바텀 내비 아래 프리미엄 유도 OFF
+    @Suppress("UnusedParameter")
+    fun shouldShowPremiumUpsellNavBanner(context: Context): Boolean = false
 }
