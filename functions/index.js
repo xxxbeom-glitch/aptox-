@@ -23,7 +23,7 @@ function getGeminiApiKey() {
   return config.api_key || config.key || process.env.GEMINI_API_KEY || "";
 }
 
-async function generateGeminiText(prompt, { maxOutputTokens = 2048 } = {}) {
+async function generateGeminiText(prompt, { maxOutputTokens = 2048, json = false } = {}) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new functions.https.HttpsError(
@@ -32,16 +32,76 @@ async function generateGeminiText(prompt, { maxOutputTokens = 2048 } = {}) {
     );
   }
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    generationConfig: {
+
+  const buildConfig = (withThinking) => {
+    const generationConfig = {
       maxOutputTokens,
       temperature: 0.2,
-    },
-  });
-  const result = await model.generateContent(prompt);
-  const text = result?.response?.text?.() ?? "";
-  return String(text).trim();
+    };
+    if (json) generationConfig.responseMimeType = "application/json";
+    // Gemini 3.5: thinking이 출력 토큰을 잡아 JSON이 잘리는 경우 완화
+    if (withThinking) generationConfig.thinkingConfig = { thinkingLevel: "minimal" };
+    return generationConfig;
+  };
+
+  const run = async (withThinking) => {
+    const model = genAI.getGenerativeModel({
+      model: GEMINI_MODEL,
+      generationConfig: buildConfig(withThinking),
+    });
+    const result = await model.generateContent(prompt);
+    return String(result?.response?.text?.() ?? "").trim();
+  };
+
+  try {
+    return await run(true);
+  } catch (e) {
+    const msg = e?.message || String(e);
+    // thinkingConfig 미지원/거부 시 재시도
+    if (msg.includes("thinking") || msg.includes("Unknown") || msg.includes("400")) {
+      console.warn("generateGeminiText: thinkingConfig 없이 재시도:", msg.substring(0, 120));
+      return await run(false);
+    }
+    throw e;
+  }
+}
+
+/** 모델 응답에서 JSON 배열 문자열만 추출 */
+function extractJsonArray(rawText) {
+  let s = String(rawText || "").trim();
+  if (!s) throw new Error("Gemini 응답이 비어 있습니다.");
+  const codeBlockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) s = codeBlockMatch[1].trim();
+  const start = s.indexOf("[");
+  const end = s.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("JSON 배열을 찾지 못했습니다: " + s.substring(0, 80));
+  }
+  return s.slice(start, end + 1);
+}
+
+/** 앱 캐시/UI canonical 라벨로 정규화 */
+function normalizeAppCategory(raw) {
+  const t = String(raw || "").trim();
+  const lower = t.toLowerCase();
+  if (t === "SNS" || lower === "sns") return "SNS";
+  if (t === "OTT" || lower === "ott") return "OTT";
+  if (t === "게임" || lower === "game" || lower === "games") return "게임";
+  if (t === "쇼핑" || lower.includes("shop")) return "쇼핑";
+  if (t === "웹툰" || lower.includes("webtoon") || lower.includes("comic")) return "웹툰";
+  if (
+    t === "주식,코인" ||
+    t === "주식·코인" ||
+    t === "주식/코인" ||
+    t === "주식&코인" ||
+    t.includes("주식") ||
+    lower.includes("stock") ||
+    lower.includes("coin")
+  ) {
+    return "주식,코인";
+  }
+  if (t === "기타" || lower === "other" || lower === "etc") return "기타";
+  return "기타";
 }
 
 // Solapi API 키 (config 우선, 없으면 환경변수 또는 기본값)
@@ -511,7 +571,7 @@ function getKakaoUserInfo(accessToken) {
  * 앱 목록 AI 카테고리 분류 - 앱에서 classifyApps({ apps: [{ package, appName }] }) 로 호출
  * 모델: gemini-3.5-flash
  * API 키: firebase functions:config:set gemini.api_key="..."
- * 응답: { results: [{ package, appName, category }] } — category는 SNS/게임/OTT/쇼핑/웹툰/주식·코인/기타 중 하나
+ * 응답: { results: [{ package, appName, category }] } — category는 SNS/게임/OTT/쇼핑/웹툰/주식,코인/기타 중 하나
  */
 exports.classifyApps = functions.https.onCall(async (data, context) => {
   const apps = data?.apps;
@@ -519,7 +579,8 @@ exports.classifyApps = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "apps 배열이 필요합니다.");
   }
 
-  const categories = "SNS, 게임, OTT, 쇼핑, 웹툰, 주식·코인, 기타";
+  // 앱 DataStore canonical과 동일 (주식,코인)
+  const categories = "SNS, 게임, OTT, 쇼핑, 웹툰, 주식,코인, 기타";
   const appListStr = apps
     .map((a) => `- ${a.package || "(없음)"} | ${a.appName || "(없음)"}`)
     .join("\n");
@@ -529,24 +590,22 @@ exports.classifyApps = functions.https.onCall(async (data, context) => {
 앱 목록:
 ${appListStr}
 
-반드시 JSON 배열만 출력하세요. 다른 설명 없이. 형식:
+반드시 JSON 배열만 출력하세요. 다른 설명·마크다운·코드펜스 없이. 형식:
 [{"package":"패키지명","appName":"앱이름","category":"카테고리"}]
-각 category는 반드시 ${categories} 중 정확히 하나만 사용.`;
+각 category는 반드시 다음 중 하나만: SNS, 게임, OTT, 쇼핑, 웹툰, 주식,코인, 기타
+주식·금융·코인 앱은 category를 정확히 "주식,코인" 으로 쓰세요.`;
 
   try {
-    const rawText = await generateGeminiText(prompt, { maxOutputTokens: 2048 });
-
-    // JSON 블록 추출 (```json ... ``` 또는 그냥 [...])
-    let jsonStr = rawText;
-    const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+    // 배치(최대 ~25앱) JSON이 thinking에 잘리지 않도록 여유 토큰
+    const rawText = await generateGeminiText(prompt, { maxOutputTokens: 8192, json: true });
+    const jsonStr = extractJsonArray(rawText);
     const arr = JSON.parse(jsonStr);
     if (!Array.isArray(arr)) throw new Error("응답이 배열이 아닙니다.");
 
     const results = arr.map((item) => ({
       package: String(item.package || ""),
       appName: String(item.appName || ""),
-      category: String(item.category || "기타").trim(),
+      category: normalizeAppCategory(item.category),
     }));
     return { results };
   } catch (e) {
