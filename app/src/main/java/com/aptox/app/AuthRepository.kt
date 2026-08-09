@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -112,29 +114,15 @@ class AuthRepository(
 
     /**
      * 구글 로그인 후 Firebase Auth로 인증
-     * Credential Manager를 사용해 Google ID Token 획득 → Firebase GoogleAuthProvider로 로그인
+     * Credential Manager → Google ID Token → Firebase GoogleAuthProvider
+     *
+     * 로그인 버튼 플로우라 [GetSignInWithGoogleOption]을 우선 사용.
+     * (One Tap용 [GetGoogleIdOption]만 쓰면 계정 미선택 시 NoCredentialException이 자주 남)
      */
     suspend fun signInWithGoogle(context: Context): Result<Unit> = runCatching {
         Log.d(TAG, "구글 로그인 시작")
 
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId("200339538980-dcns3vafkransdp86o3sd74n1ontbb1j.apps.googleusercontent.com")
-            .build()
-
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-
-        val credentialManager = CredentialManager.create(context)
-        val credentialResponse = try {
-            credentialManager.getCredential(context = context, request = request)
-        } catch (e: GetCredentialCancellationException) {
-            throw IllegalStateException("구글 로그인이 취소되었습니다.", e)
-        }
-
-        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
-        val idToken = googleIdTokenCredential.idToken
+        val idToken = requestGoogleIdToken(context, forReauth = false)
         Log.d(TAG, "구글 ID Token 발급 성공")
 
         val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
@@ -174,31 +162,68 @@ class AuthRepository(
     suspend fun reauthenticateWithGoogle(context: Context): Result<Unit> = runCatching {
         val user = auth.currentUser ?: throw IllegalStateException("로그인된 사용자가 없습니다")
 
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(true)
-            .setServerClientId("200339538980-dcns3vafkransdp86o3sd74n1ontbb1j.apps.googleusercontent.com")
-            .build()
-
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-
-        val credentialManager = CredentialManager.create(context)
-        val credentialResponse = try {
-            credentialManager.getCredential(context = context, request = request)
-        } catch (e: GetCredentialCancellationException) {
-            throw IllegalStateException("구글 재인증이 취소되었습니다.", e)
-        }
-
-        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
-        val idToken = googleIdTokenCredential.idToken
+        val idToken = requestGoogleIdToken(context, forReauth = true)
         val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
         user.reauthenticate(firebaseCredential).await()
         Log.d(TAG, "구글 재인증 성공: uid=${user.uid}")
     }
 
+    /**
+     * @param forReauth true면 이미 앱에 연동된 계정만 먼저 시도한 뒤, 없으면 전체 계정 선택 UI로 fallback
+     */
+    private suspend fun requestGoogleIdToken(context: Context, forReauth: Boolean): String {
+        val credentialManager = CredentialManager.create(context)
+
+        suspend fun getWith(option: androidx.credentials.CredentialOption): String {
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(option)
+                .build()
+            val response = try {
+                credentialManager.getCredential(context = context, request = request)
+            } catch (e: GetCredentialCancellationException) {
+                throw IllegalStateException(
+                    if (forReauth) "구글 재인증이 취소되었습니다." else "구글 로그인이 취소되었습니다.",
+                    e,
+                )
+            }
+            return GoogleIdTokenCredential.createFrom(response.credential.data).idToken
+        }
+
+        // 1) 버튼형 Sign in with Google (계정 선택 UI)
+        try {
+            return getWith(GetSignInWithGoogleOption.Builder(GOOGLE_WEB_CLIENT_ID).build())
+        } catch (e: NoCredentialException) {
+            Log.w(TAG, "GetSignInWithGoogleOption: NoCredential → GetGoogleIdOption fallback", e)
+        }
+
+        // 2) One Tap / ID 옵션 fallback
+        try {
+            return getWith(
+                GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(forReauth)
+                    .setServerClientId(GOOGLE_WEB_CLIENT_ID)
+                    .build(),
+            )
+        } catch (e: NoCredentialException) {
+            if (forReauth) {
+                return getWith(
+                    GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(false)
+                        .setServerClientId(GOOGLE_WEB_CLIENT_ID)
+                        .build(),
+                )
+            }
+            throw IllegalStateException(
+                "구글 계정을 찾을 수 없어요. 폰에 Google 계정이 로그인돼 있는지 확인해 주세요.",
+                e,
+            )
+        }
+    }
+
     companion object {
         private const val TAG = "AuthRepository"
+        private const val GOOGLE_WEB_CLIENT_ID =
+            "200339538980-dcns3vafkransdp86o3sd74n1ontbb1j.apps.googleusercontent.com"
     }
 
     /** 현재 로그인된 사용자 표시용 정보 */
